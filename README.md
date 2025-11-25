@@ -1,7 +1,4 @@
-# Water
-[![Discord server](https://discord.com/api/guilds/697366856914173994/widget.png)](https://discord.gg/wEZbFFX)
-
-Fresh Water Available.
+# Fresh Water Available.
 
 This client aims for:
 - Stable behavior and performance
@@ -75,19 +72,13 @@ Share game stats with Water Discord Bot (optional):
 
 ### Water Customizations Window
 ![Customization menu](screenshots/water-window.png)
-```
-
-### Tips
-- Use **descriptive alt text** in square brackets
-- Keep images at reasonable resolution (1920x1080 or smaller)
-- Use PNG for UI screenshots, JPG for game screenshots
-- Organize images in a dedicated folder for easy management
 
 ---
 
 ## Supported Platforms
-| Platform | File Type |
-|-|-|
-| Windows | `exe` |
-| macOS | `dmg` |
-| Linux | `AppImage` |
+
+| Platform | File Type   |
+|---------|------------|
+| Windows | `.exe`     |
+| macOS   | `.dmg`     |
+| Linux   | `.AppImage`|
