@@ -1,0 +1,143 @@
+/* Water Client - Internal main_custom.css */
+/* This file is served to replace Krunker's main_custom.css */
+
+/* Full Screen Overlay Logic */
+#instructionsFadeBG {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: black !important;
+    /* Dark background */
+    z-index: 2147483647 !important;
+    /* Max Z-Index */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    pointer-events: all !important;
+}
+
+/* Pink Spinner Styles */
+.water-loading-spinner {
+    position: relative !important;
+    transform: rotate(-60deg) !important;
+    width: 100px;
+    height: 100px;
+}
+
+.water-loading-spinner span {
+    position: absolute;
+    border: solid 10px transparent;
+    border-top-width: 6px;
+    border-bottom-width: 6px;
+    display: block;
+    transform: translate(-50%, -50%);
+}
+
+/* Outer ring */
+.water-loading-spinner .outer span {
+    width: 50px;
+    height: 26px;
+    animation: water-destiny-loading 3000ms infinite;
+    left: 50%;
+    top: 50%;
+}
+
+.water-loading-spinner .outer span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.water-loading-spinner .outer span:nth-child(2) {
+    transform: translate(-50%, -50%) rotate(60deg);
+    animation-delay: 500ms;
+}
+
+.water-loading-spinner .outer span:nth-child(3) {
+    transform: translate(-50%, -50%) rotate(120deg);
+    animation-delay: 1000ms;
+}
+
+/* Inner ring */
+.water-loading-spinner .inner span {
+    width: 24px;
+    height: 11px;
+    animation: water-destiny-loading 1500ms infinite;
+    left: 50%;
+    top: 50%;
+}
+
+.water-loading-spinner .inner span:nth-child(1) {
+    animation-delay: 500ms;
+}
+
+.water-loading-spinner .inner span:nth-child(2) {
+    transform: translate(-50%, -50%) rotate(60deg);
+    animation-delay: 250ms;
+}
+
+.water-loading-spinner .inner span:nth-child(3) {
+    transform: translate(-50%, -50%) rotate(120deg);
+    animation-delay: 0s;
+}
+
+@keyframes water-destiny-loading {
+    0% {
+        border-left-color: transparent;
+        border-right-color: black;
+    }
+
+    30% {
+        border-left-color: transparent;
+        border-right-color: transparent;
+    }
+
+    50% {
+        border-left-color: transparent;
+        border-right-color: transparent;
+    }
+
+    50.00001% {
+        border-left-color: black;
+        border-right-color: transparent;
+    }
+
+    80% {
+        border-left-color: transparent;
+        border-right-color: transparent;
+    }
+
+    100% {
+        border-left-color: transparent;
+        border-right-color: transparent;
+    }
+}
+
+/* Water logo */
+.water-loading-logo {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: black;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+.water-loading-logo p {
+    margin: 0;
+    line-height: 1.2;
+    font-size: 18px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+/* Fade out animation */
+.water-loading-fadeout {
+    opacity: 0 !important;
+    transition: opacity 0.5s ease-out !important;
+    pointer-events: none !important;
+}

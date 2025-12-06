@@ -1,0 +1,668 @@
+:root {
+    --div-grey: transparent;
+    --div-black: rgb(0 0 0 / 30%);
+    --ign: "XXL";
+    --clan: " [888]";
+    --loadbg: url('https://i.postimg.cc/KvGkXwwp/966850b41da7623591e2b1f55099f73f.jpg');
+    --endbg: url('https://i.postimg.cc/Zqd0FSBD/b12be12298d91c2483b7193560cd69de.jpg');
+    --pfp: url('https://i.postimg.cc/9QxyNCfC/secondpfp.jpg');
+    --bg: rgb(0 0 0 / 30%)
+}
+
+*,
+*:hover,
+*:active {
+    border: 0 !important;
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important
+}
+
+.sliderVal,
+.settName,
+.settNameSmall,
+th,
+tr,
+.button,
+#menuBtnRanked {
+    border: 0 !important;
+    animation: none !important;
+    transform: none;
+    transition: none
+}
+
+.button:hover,
+#menuBtnRanked:hover {
+    border: 0 !important;
+    animation: none !important;
+    transform: none;
+    transition: none
+}
+
+.button:active,
+#menuBtnRanked:hover {
+    border: 0 !important;
+    animation: none !important;
+    transform: none;
+    transition: none
+}
+
+.leaderNameM,
+#menuAccountUsername,
+.newLeaderNameM,
+a.floatR,
+.pListTable>tbody>tr:first-child .pListName,
+.endTableN[style*="#fff"] {
+    font-size: 0
+}
+
+.leaderNameM::before {
+    content: var(--ign) var(--clan);
+    font-size: 18px;
+    color: #fff
+}
+
+.newLeaderNameM::before {
+    content: var(--ign) var(--clan);
+    font-size: 15px;
+    color: #e0e0e0
+}
+
+#menuAccountUsername::before {
+    content: var(--ign);
+    font-size: 15px
+}
+
+a.floatR::before {
+    content: var(--ign);
+    font-size: 22px
+}
+
+.pListTable>tbody>tr:first-child .pListName::before {
+    content: var(--ign);
+    font-size: 20px !important;
+    color: #fff
+}
+
+.endTableN[style*="#fff"]:before {
+    content: var(--ign) " " var(--clan);
+    font-size: 20px !important
+}
+
+#tlInfHold,
+#menuClassContainer,
+#gameNameHolder,
+#spectButtonHolder,
+#chatUIHolder,
+#mouseAccel_div {
+    display: block !important
+}
+
+#instructionsFadeBG {
+    background-size: cover;
+    background-repeat: no-repeat;
+    content: var(--loadbg) !important;
+    z-index: 10;
+    width: 100% !important
+}
+
+#instructionsUpdate {
+    z-index: 11
+}
+
+#uiBase.onEndScrn:not(.onGame):not(.onMenu)>div>#endUI {
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-image: var(--endbg) !important
+}
+
+#reloadMsg::after {
+    content: "[R]";
+    color: red;
+    font-size: 25px
+}
+
+#reloadMsg {
+    bottom: 35%;
+    border: none;
+    background: 0 0;
+    background-color: transparent;
+    font-size: 0
+}
+
+#krTagHolder {
+    position: fixed;
+    right: 265px;
+    bottom: 25px
+}
+
+#killStreakHolder {
+    position: fixed;
+    left: 53% !important;
+    top: 80% !important
+}
+
+#deathUIBottom {
+    backdrop-filter: unset;
+    width: 0;
+    background: unset;
+    animation: unset
+}
+
+.death-row-user-text {
+    position: absolute;
+    top: 10px;
+    left: calc(50% - 115px);
+    filter: unset
+}
+
+.death-row-weapon-text {
+    position: fixed;
+    left: calc(50% - 115px);
+    bottom: 125px;
+    filter: unset;
+    z-index: 9999999999
+}
+
+.death-row-bottom {
+    position: fixed;
+    right: 50%;
+    height: 85px;
+    background-color: rgb(0 0 0 / 40%) !important;
+    transform: translate(50%, 50%);
+    outline: unset;
+    filter: unset;
+    border-radius: unset
+}
+
+.death-row-bottom::before {
+    content: 'Killed By';
+    position: absolute;
+    font-size: 25px;
+    left: calc(50% - 80px);
+    top: -50px;
+    color: white
+}
+
+.death-row-class {
+    height: 65px;
+    width: 65px;
+    margin: 10px
+}
+
+#customizeButton {
+    width: 300px;
+    height: 115px;
+    position: relative;
+    right: 0;
+    bottom: -50px;
+    transform: translateY(0%);
+    font-size: 0 !important;
+    box-shadow: none !important;
+    background-color: rgba(0, 0, 0, .0) !important
+}
+
+#customizeButton>span {
+    font-size: 100px !important
+}
+
+#classPreviewCanvas {
+    margin-bottom: 0;
+    margin-right: 0;
+    bottom: -60px;
+    position: fixed;
+    right: -170px
+}
+
+#chatSwitch {
+    margin-bottom: 0 !important;
+    margin-left: 5px !important
+}
+
+#chatInputHolder {
+    width: 325px !important
+}
+
+#chatList {
+    border-radius: 5px !important;
+    background-color: var(--bg) !important;
+    bottom: 5px !important;
+    width: 325px !important
+}
+
+#chatInput::placeholder {
+    color: transparent
+}
+
+#chatInput {
+    width: 315px
+}
+
+#chatInputHolder::before {
+    content: "Talk Shit";
+    font-size: 14px;
+    position: absolute;
+    color: #ffffffaa;
+    bottom: 15px;
+    left: 15px;
+    opacity: 1;
+    pointer-events: none
+}
+
+#chatHolder:focus-within #chatInputHolder::before {
+    opacity: 0
+}
+
+#chatInputHolder {
+    background-color: rgb(0 0 0 / 0.5) !important
+}
+
+#uiBase.onGame #chatHolder {
+    bottom: 90px
+}
+
+#ammoHolder {
+    background-color: transparent;
+    transform: none;
+    padding: 0;
+    margin: 0;
+    position: fixed;
+    left: calc(50% - 30px);
+    top: calc(50% + 30px);
+    height: 6px;
+    width: 60px;
+    border-radius: 0;
+    background-image: linear-gradient(to right, #ddd, #ddd)
+}
+
+#ammoVal {
+    position: fixed;
+    bottom: 16px;
+    font-size: 30px;
+    border-radius: 4px;
+    background: rgb(0 0 0 / 30%);
+    padding: 5px 5px;
+    width: 125px;
+    right: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center
+}
+
+#bottomLeftPlayerRight {
+    position: fixed;
+    bottom: 16px;
+    font-size: 30px;
+    border-radius: 4px;
+    background: rgb(0 0 0 / 0%);
+    padding: 5px 5px;
+    width: 125px;
+    left: 85px;
+    display: flex;
+    justify-content: center;
+    align-items: center
+}
+
+#bottomLeftHealth {
+    font-size: 30px
+}
+
+#bottomLeftHealthBar {
+    display: flex;
+    position: fixed;
+    column-gap: 0;
+    background-color: rgb(0 0 0 / 30%);
+    width: 312px;
+    bottom: 18px;
+    padding: 7px;
+    border-radius: 5px;
+    left: 85px
+}
+
+#bottomLeftPlayer {
+    border-radius: 0;
+    background-color: transparent;
+    display: block;
+    width: 0;
+    height: 0
+}
+
+#bottomLeftPlayerLeft {
+    width: 52px;
+    height: 52px;
+    position: fixed;
+    display: block;
+    background-color: var(--div-black);
+    margin: 0;
+    bottom: 18px;
+    padding: 7px;
+    border-radius: 5px
+}
+
+.nHealthBarSeg {
+    display: inline-block;
+    width: 100%;
+    height: 52px;
+    background-color: transparent;
+    margin-right: -1px !important
+}
+
+.nHpBSeg {
+    height: 100%;
+    border-radius: 0
+}
+
+#subLogoButtons {
+    bottom: 20px;
+    transform: translate(-50%, 0) scale(0.8);
+    width: unset
+}
+
+.statIcon {
+    padding: 2px;
+    margin-right: 5px
+}
+
+div#bottomLeftHealth:before {
+    content: "+ "
+}
+
+div#ammoVal::after {
+    content: "!!!";
+    margin-left: 10px
+}
+
+#matchVoteHolder {
+    display: flex !important;
+    flex-direction: column;
+    height: auto;
+    left: unset;
+    right: 50px;
+    transform: unset;
+    min-width: 200px
+}
+
+.weapItem {
+    background: var(--bg);
+    position: fixed;
+    right: 83px;
+    transform: translateX(50%);
+    bottom: 85px;
+    opacity: 0 !important;
+    transition-duration: 0.5s !important
+}
+
+.weapIcon {
+    width: 110px;
+    height: 50px
+}
+
+.weapItem[style*="1"] {
+    opacity: 1 !important
+}
+
+#streamContainerNew,
+.weapSkin,
+#bubbleContainer,
+.slider:before,
+.setSugBox2,
+#tlInfHold,
+#menuClassIcn,
+#mapInfoHld,
+#matchInfoHolder,
+#menuBtnQuickMatch,
+#instructions,
+#hostCMapPickr,
+#mainLogo,
+#instructionHider,
+#matchEndSignupIncentives,
+#mainLogoFace,
+#seasonLabel,
+#homeStoreAd,
+#menuClassContainerInner,
+#newUserGuide,
+#headerRightSocial,
+#bottomLeftTeamType,
+#bottomLeftTeamName,
+#termsInfo,
+#krDiscountAd,
+#bottomLeftChallIcon,
+#chatInputHolder>div:nth-child(3),
+#PC7WaterMark2,
+#streamContainer,
+#leaderContainer>div>img,
+#popupBack,
+#topBox,
+#rightBox,
+#bottomBox,
+#leftBox,
+#bundlePop,
+#premiumPop,
+#aHider,
+/*.view-stack.svelte-1lb3q6y,*/
+#chatInputHolder>div:nth-child(1),
+#matchInfo,
+#matchInfo.topLeftOld,
+#bottomLeftTeamHolder,
+#ammoMax,
+#gameAnnouncementEl,
+#ammoIcon,
+.weapKey,
+#timerIcon.topLeftOld,
+.leaderCounter,
+.weapStreakHolder,
+.newLeaderTeam,
+.newLeaderCounter,
+.crStat,
+.game-announcement.svelte-fawdim,
+.moreKrunkerClient.svelte-19783yx,
+.moreKrunkerTitle.svelte-19783yx,
+.moreKrunkerOptionDescription.svelte-19783yx,
+.menuItem .menuItemTitle,
+.signup-rewards-container--match-end.svelte-1v6b0qm,
+.guest-earned-collect.svelte-lh5h5y,
+#kdLayout,
+#gameNameHolder,
+#onetrust-consent-sdk,
+#newsHolder,
+.krSocial,
+.imageButton,
+#editorBtnM,
+#youNewDiv,
+#seasonLabel,
+#mainLogo,
+#streamContainer,
+#menuItemContainer>div:nth-child(5),
+#menuClassName,
+.endAHolder,
+.accountCreatePop,
+#tabHolder>div:nth-child(2),
+#tabHolder>div:nth-child(3),
+#tabHolder>div:nth-child(4),
+.death-stats,
+.death-row-user-stat,
+.death-row-class-level,
+.death-stats-row .death-row-right,
+.death-row-kills,
+.death-row-left .death-row-weapon-img,
+.death-column[style='justify-content: start;'],
+.death-column[style='justify-content: center;'],
+.death-row-bottom-bg {
+    display: none !important
+}
+
+#endTable,
+#tabHolder,
+.endSection,
+.crStat,
+#kdLayout,
+.gfSection,
+#windowHolder.popupWin,
+.setHed,
+.setBodH,
+.settingTab,
+#bottomLeftPlayer,
+.greyInner,
+.greyInlineInner,
+.greyInlineInnerMid {
+    background-color: transparent !important
+}
+
+.tabHeader {
+    margin-left: 25pc
+}
+
+#interactMsg {
+    font-size: 15px;
+    line-height: 50px;
+    padding-left: 25px;
+    padding-right: 25px;
+    bottom: 100px !important
+}
+
+#menuMiniProfilePic {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    content: var(--pfp) !important;
+    image-rendering: pixelated
+}
+
+#profilePicM,
+#bottomLeftClassImg {
+    content: var(--pfp);
+    border-radius: 0rem;
+    border: none;
+    image-rendering: auto
+}
+
+#genericPop.importPop,
+#popupHolder {
+    z-index: 99999999 !important
+}
+
+#menuItemContainer {
+    bottom: unset;
+    width: unset;
+    flex-direction: row;
+    border-radius: 0;
+    border-bottom: 2px solid #ffffff52 !important
+}
+
+.menuItem {
+    flex-direction: ow;
+    height: fit-content;
+    padding: 10px;
+    margin: 10px
+}
+
+#uiBase.onMenu #chatHolder {
+    left: 20px;
+    bottom: 20px
+}
+
+.moreKrunkerOptions.svelte-19783yx {
+    width: auto !important
+}
+
+.moreKrunkerPopup {
+    height: auto
+}
+
+#uiBase.onMenu #spectateUI {
+    display: block !important
+}
+
+#uiBase.onCompMenu.onMenu #specTimer,
+#uiBase.onMenu #spec1,
+#uiBase.onMenu #spec0,
+#uiBase.onMenu #specControlHolder,
+#uiBase.onMenu #specNames {
+    display: none !important
+}
+
+#uiBase.onMenu #spectateHUD {
+    box-sizing: border-box;
+    display: flex !important;
+    justify-content: center;
+    height: .5rem;
+    white-space: nowrap;
+    width: max-content;
+    position: fixed;
+    top: calc(50% + 140px)
+}
+
+#uiBase.onMenu #spectateHUD #specGMessage {
+    top: 0
+}
+
+#uiBase.onMenu #spectateUI>#spectateHUD {
+    z-index: 1;
+    transform: unset
+}
+
+#uiBase.onMenu .spectateInfo {
+    position: fixed;
+    top: calc(50.5% + 80px);
+    left: 50%;
+    transform: translate(-50%, -50%)
+}
+
+#uiBase.onMenu #spectateUI div .spectateInfo #specTimer {
+    background-color: #0000;
+    padding: 25px;
+    font-size: 42px;
+    border-radius: .5em
+}
+
+#uiBase.onMenu #specKPDContr {
+    display: none
+}
+
+#uiBase.onMenu #spectateUI div#specStats {
+    position: absolute;
+    top: calc(50% + 13em);
+    left: 50%;
+    transform: translate(-50%);
+    z-index: 1
+}
+
+#uiBase.onMenu #spectateUI div#specStats:before {
+    content: "Spectating";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translate(-50%);
+    font-size: 1.2em;
+    padding-bottom: .5em
+}
+
+#uiBase.onMenu #spectButton span {
+    font-size: 0 !important
+}
+
+.switchsml {
+    width: 60px;
+    height: 60px
+}
+
+.sliderSml:before {
+    display: none
+}
+
+.sliderSml {
+    border-radius: 5px
+}
+
+#uiBase.onMenu #spectButton {
+    top: calc(50% - 130px)
+}
+
+#uiBase.onMenu #specGameInfo {
+    display: block !important
+}
+
+#spectButtonHolder,
+#chatUIHolder {
+    display: block !important
+}

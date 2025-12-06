@@ -1,0 +1,439 @@
+const CSSLoader = require('./css-loader');
+const path = require('path');
+const fs = require('fs');
+
+class CommunityCSSAddon {
+    constructor() {
+        this.cssLoader = new CSSLoader();
+        this.initialized = false;
+    }
+
+    async init() {
+        try {
+            await this.cssLoader.init();
+            console.log('[CommunityCSSAddon] CSS Loader initialized');
+            // UI toggles will be applied after game loads
+        } catch (e) {
+            console.error('[CommunityCSSAddon] CSS Loader init error:', e);
+        }
+    }
+
+    injectSidebarItem() {
+        try {
+            const menuContainer = document.getElementById('menuItemContainer');
+            if (!menuContainer) {
+                console.log('[CommunityCSSAddon] menuItemContainer not found yet');
+                return false;
+            }
+
+            // Inject Material Icons Outlined font if not already present
+            if (!document.getElementById('material-icons-outlined-font')) {
+                const fontLink = document.createElement('link');
+                fontLink.id = 'material-icons-outlined-font';
+                fontLink.rel = 'stylesheet';
+                fontLink.href = 'https://fonts.googleapis.com/css2?family=Material+Icons+Outlined';
+                document.head.appendChild(fontLink);
+
+                const fontStyle = document.createElement('style');
+                fontStyle.textContent = `
+                    .material-icons-outlined {
+                        font-family: 'Material Icons Outlined';
+                        font-weight: normal;
+                        font-style: normal;
+                        font-size: 24px;
+                        line-height: 1;
+                        letter-spacing: normal;
+                        text-transform: none;
+                        display: inline-block;
+                        white-space: nowrap;
+                        word-wrap: normal;
+                        direction: ltr;
+                        -webkit-font-feature-settings: 'liga';
+                        -webkit-font-smoothing: antialiased;
+                    }
+                `;
+                document.head.appendChild(fontStyle);
+            }
+
+            // Inject Material Symbols Outlined font for folder and edit icons
+            if (!document.getElementById('material-symbols-outlined-font')) {
+                const fontLink = document.createElement('link');
+                fontLink.id = 'material-symbols-outlined-font';
+                fontLink.rel = 'stylesheet';
+                fontLink.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200';
+                document.head.appendChild(fontLink);
+
+                const fontStyle = document.createElement('style');
+                fontStyle.textContent = `
+                    .material-symbols-outlined {
+                        font-family: 'Material Symbols Outlined';
+                        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+                        font-size: 24px;
+                        user-select: none;
+                    }
+                `;
+                document.head.appendChild(fontStyle);
+            }
+
+            if (document.getElementById('communityCSSBtn')) {
+                return true;
+            }
+
+            const btn = document.createElement('div');
+            btn.id = 'communityCSSBtn';
+            btn.className = 'menuItem';
+            btn.setAttribute('onmouseenter', 'playTick()');
+            btn.onclick = () => {
+                if (typeof window.playSelect === 'function') window.playSelect();
+                this.openWaterWindow();
+            };
+
+            btn.innerHTML = `
+                <span class="material-icons-outlined menBtnIcn" style="color:#ff69b4">water_drop</span>
+                <div class="menuItemTitle">Water</div>
+            `;
+
+            const firstItem = menuContainer.firstChild;
+            if (firstItem) {
+                menuContainer.insertBefore(btn, firstItem);
+            } else {
+                menuContainer.appendChild(btn);
+            }
+
+            console.log('[CommunityCSSAddon] Water button injected successfully');
+
+            // Inject Mods button if enabled
+            this.injectModsButton();
+
+            return true;
+        } catch (e) {
+            console.error('[CommunityCSSAddon] Inject error:', e);
+            return false;
+        }
+    }
+
+    injectModsButton() {
+        try {
+            // Check if Mods button should be shown
+            const savedState = localStorage.getItem('water-ui-showModsButton');
+            const shouldShow = savedState !== null ? savedState === 'true' : true; // Default ON
+
+            if (!shouldShow) {
+                // Remove button if it exists and shouldn't be shown
+                const existingBtn = document.getElementById('modsBtn');
+                if (existingBtn) existingBtn.remove();
+                return;
+            }
+
+            const menuContainer = document.getElementById('menuItemContainer');
+            if (!menuContainer) return;
+
+            // Don't inject if already exists
+            if (document.getElementById('modsBtn')) return;
+
+            const modsBtn = document.createElement('div');
+            modsBtn.id = 'modsBtn';
+            modsBtn.className = 'menuItem';
+            modsBtn.setAttribute('onmouseenter', 'playTick()');
+            modsBtn.onclick = () => {
+                if (typeof window.playSelect === 'function') window.playSelect();
+                if (typeof window.showWindow === 'function') {
+                    window.showWindow(4);
+                }
+            };
+
+            modsBtn.innerHTML = `
+                <span class="material-icons-outlined menBtnIcn" style="color:#4CAF50; font-size: 76px;">color_lens</span>
+                <div class="menuItemTitle">Mods</div>
+            `;
+
+            // Find Settings button and insert before it
+            // Settings is typically the last item or second to last
+            const menuItems = menuContainer.children;
+            let settingsBtn = null;
+            for (let i = 0; i < menuItems.length; i++) {
+                const titleEl = menuItems[i].querySelector('.menuItemTitle');
+                if (titleEl && titleEl.textContent.trim().toLowerCase() === 'settings') {
+                    settingsBtn = menuItems[i];
+                    break;
+                }
+            }
+
+            if (settingsBtn) {
+                menuContainer.insertBefore(modsBtn, settingsBtn);
+            } else {
+                // Fallback: append to end
+                menuContainer.appendChild(modsBtn);
+            }
+
+            console.log('[CommunityCSSAddon] Mods button injected successfully');
+        } catch (e) {
+            console.error('[CommunityCSSAddon] Mods button inject error:', e);
+        }
+    }
+
+    openWaterWindow() {
+        try {
+            let overlay = document.getElementById('waterOverlay');
+
+            if (overlay) {
+                // Toggle
+                const isHidden = overlay.style.display === 'none';
+                overlay.style.display = isHidden ? 'block' : 'none';
+                document.getElementById('waterThemesWindow').style.display = isHidden ? 'block' : 'none';
+                document.getElementById('waterCustomizationsWindow').style.display = isHidden ? 'block' : 'none';
+                return;
+            }
+
+            // First time - inject CSS
+            if (!document.getElementById('water-styles')) {
+                const style = document.createElement('style');
+                style.id = 'water-styles';
+                style.textContent = `
+                    #waterOverlay {
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background-color: rgba(0, 0, 0, 0.75);
+                        z-index: 1000000;
+                        display: block;
+                    }
+                    .waterWindow {
+                        position: fixed;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        z-index: 1000001;
+                        width: 650px;
+                        max-width: 45%;
+                        max-height: 85vh;
+                        background-color: #353535;
+                        border-radius: 6px;
+                        padding: 0;
+                        overflow: hidden;
+                        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+                        display: block;
+                    }
+                    .waterWindow-left {
+                        left: calc(50% - 680px);
+                    }
+                    .waterWindow-right {
+                        right: calc(50% - 680px);
+                    }
+                    .waterWindowHeader {
+                        background-color: rgba(0, 0, 0, 0.2);
+                        padding: 15px 20px;
+                        font-size: 20px;
+                        color: #fff;
+                        font-weight: bold;
+                    }
+                    .waterWindowContent {
+                        padding: 10px 20px 20px 20px;
+                        max-height: calc(85vh - 60px);
+                        overflow-y: auto;
+                    }
+                    .theme-item, .script-item {
+                        background: rgba(255, 255, 255, 0.05);
+                        padding: 12px 15px;
+                        margin: 8px 0;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        border: 1px solid transparent;
+                    }
+                    .theme-item:hover {
+                        background: rgba(255, 255, 255, 0.08);
+                    }
+                    .theme-item.active-theme {
+                        background: rgba(255, 105, 180, 0.15) !important;
+                        border-color: rgba(255, 105, 180, 0.4) !important;
+                    }
+                    .theme-item.client-theme {
+                        background: linear-gradient(135deg, rgba(255, 105, 180, 0.1), rgba(138, 43, 226, 0.1));
+                        border: 1px solid rgba(255, 105, 180, 0.3);
+                        position: relative;
+                    }
+                    .theme-item.client-theme::before {
+                        content: 'CLIENT';
+                        position: absolute;
+                        top: 8px;
+                        right: 8px;
+                        background: linear-gradient(135deg, #ff69b4, #8a2be2);
+                        color: white;
+                        font-size: 10px;
+                        font-weight: bold;
+                        padding: 2px 8px;
+                        border-radius: 3px;
+                        letter-spacing: 0.5px;
+                    }
+                    .theme-item.client-theme:hover {
+                        background: linear-gradient(135deg, rgba(255, 105, 180, 0.15), rgba(138, 43, 226, 0.15));
+                        border-color: rgba(255, 105, 180, 0.5);
+                    }
+                    .script-item {
+            const fs = require('fs');
+            const path = require('path');
+            const { app } = require('electron').remote || require('@electron/remote');
+
+            const scriptsPath = path.join(app.getPath('documents'), 'Water', 'Scripts');
+
+            // Ensure directory exists
+            if (!fs.existsSync(scriptsPath)) {
+                list.innerHTML = '<div class="no-items-msg">No scripts directory found. Create: Documents\\Water\\Scripts</div>';
+                return;
+            }
+
+            // Read all .js files
+            const files = fs.readdirSync(scriptsPath)
+                .filter(f => f.endsWith('.js'))
+                .sort();
+
+            if (files.length === 0) {
+                list.innerHTML = '<div class="no-items-msg">No scripts found. Place .js files in Documents\\Water\\Scripts</div>';
+                return;
+            }
+
+            list.innerHTML = files.map(filename => {
+                const scriptId = filename.replace('.js', '');
+                const savedState = localStorage.getItem(`water - script - ${ scriptId } `);
+                // Default to enabled if no setting exists
+                const isEnabled = savedState === null ? true : savedState === 'true';
+
+                return `
+                    < div class="settNameSmall script-item" >
+                        <span class="script-name">${filename}</span>
+                        <label class="switch" style="margin-left: 10px;">
+                            <input type="checkbox" id="water-script-${scriptId}" 
+                                   ${isEnabled ? 'checked' : ''} 
+                                   onchange="window.toggleWaterScript('${scriptId}', this.checked)">
+                            <span class="slider"><span class="grooves"></span></span>
+                        </label>
+                    </div >
+                    `;
+            }).join('');
+
+            // Define toggle function
+            window.toggleWaterScript = (scriptId, enabled) => {
+                localStorage.setItem(`water - script - ${ scriptId } `, enabled.toString());
+                console.log(`[Water] Script ${ scriptId }: ${ enabled ? 'ENABLED' : 'DISABLED' } `);
+                console.log('[Water] Restart client to apply script changes');
+            };
+        } catch (e) {
+            console.error('[CommunityCSSAddon] Render scripts error:', e);
+            const list = document.getElementById('water-scripts-list');
+            if (list) list.innerHTML = `< div class="no-items-msg" style = "color: #ff5555" > Error: ${ e.message }</div > `;
+        }
+    }
+
+    getUIToggles() {
+        return [
+            { id: 'hideAds', name: 'Hide ADs', css: '#mainLogo, #topRightAdHolder, #aHolder, #endAContainer, #bubbleContainer, #homeStoreAd, #newUserGuide, #doubleRaidDropsAd, #battlepassAd, #updateAd, #mainLogoFace, #seasonLabel, #doubleXPHolder, .webpush-container, #krDiscountAd, #surveyAd {display: none !important;}', defaultOn: false },
+            { id: 'hideTermsInfo', name: 'Hide Terms Info', css: '#termsInfo {display: none;}', defaultOn: false },
+            { id: 'hideSignupAlerts', name: 'Hide Signup Alerts', css: '#signupRewardsButton, .signup-rewards-container, .guest-earned-collect, #notificationCenter {display: none !important;}', defaultOn: true },
+            { id: 'hideLoadingScreen', name: 'Hide Loading Screen', css: '', defaultOn: false, isClientSetting: true },
+            { id: 'showModsButton', name: 'Bring Back Mods Button', css: '', defaultOn: true, isModsButton: true },
+            { id: 'hideMoreKrunker', name: 'Hide More Krunker', css: '.menuItem:nth-child(8) {display: none !important;}', defaultOn: true },
+            { id: 'hideSocial', name: 'Hide Social & Trading Button', css: '.menuItem:nth-child(5) {display: none;}', defaultOn: false },
+            { id: 'hideCommunity', name: 'Hide Community Button', css: '.menuItem:nth-child(6) {display: none;}', defaultOn: false },
+            { id: 'hideGames', name: 'Hide Games Button', css: '.menuItem:nth-child(7) {display: none;}', defaultOn: false },
+            { id: 'hideStream', name: 'Hide Old & New Stream Container', css: '#streamContainer, #streamContainerNew {display: none !important;}', defaultOn: false },
+            { id: 'hideQuickMatch', name: 'Hide Quick Match Button', css: '#menuBtnQuickMatch {display: none !important;}', defaultOn: true }
+        ];
+    }
+
+    applyUIToggles() {
+        try {
+            const uiToggles = this.getUIToggles();
+            uiToggles.forEach(toggle => {
+                const savedState = localStorage.getItem(`water - ui - ${ toggle.id } `);
+                const shouldApply = savedState !== null ? savedState === 'true' : toggle.defaultOn;
+
+                if (shouldApply && toggle.css) {
+                    // Handle CSS-based toggles
+                    const styleId = `water - ui - style - ${ toggle.id } `;
+                    let styleElement = document.getElementById(styleId);
+                    if (!styleElement) {
+                        styleElement = document.createElement('style');
+                        styleElement.id = styleId;
+                        styleElement.textContent = toggle.css;
+                        document.head.appendChild(styleElement);
+                    }
+                }
+            });
+            console.log('[CommunityCSSAddon] UI toggles applied');
+        } catch (e) {
+            console.error('[CommunityCSSAddon] Apply UI toggles error:', e);
+        }
+    }
+
+    renderUIToggles() {
+        try {
+            const list = document.getElementById('water-ui-list');
+            if (!list) return;
+
+            const uiToggles = this.getUIToggles();
+
+            list.innerHTML = uiToggles.map(toggle => {
+                let isChecked = toggle.defaultOn;
+                try {
+                    const savedState = localStorage.getItem(`water - ui - ${ toggle.id } `);
+                    if (savedState !== null) isChecked = savedState === 'true';
+                } catch (e) {
+                    console.warn('[Water] localStorage access failed:', e);
+                }
+
+                return `
+                    < div class="settNameSmall script-item" >
+                        <span class="script-name">${toggle.name}</span>
+                        <label class="switch" style="margin-left: 10px;">
+                            <input type="checkbox" id="water-ui-${toggle.id}" ${isChecked ? 'checked' : ''} onchange="window.toggleWaterUI('${toggle.id}', this.checked)">
+                            <span class="slider"><span class="grooves"></span></span>
+                        </label>
+                    </div >
+                    `;
+            }).join('');
+
+            // Define the toggle function globally
+            window.toggleWaterUI = (toggleId, enabled) => {
+                const toggle = this.getUIToggles().find(t => t.id === toggleId);
+                if (!toggle) return;
+
+                // Handle Mods button toggle specially
+                if (toggle.isModsButton) {
+                    localStorage.setItem(`water - ui - ${ toggleId } `, enabled.toString());
+                    console.log(`[Water] UI toggle ${ toggle.name }: ${ enabled ? 'ON' : 'OFF' } `);
+                    // Re-inject or remove the Mods button
+                    this.injectModsButton();
+                    return;
+                }
+
+                // Handle CSS-based toggles
+                const styleId = `water - ui - style - ${ toggleId } `;
+                let styleElement = document.getElementById(styleId);
+
+                if (enabled) {
+                    if (!styleElement && toggle.css) {
+                        styleElement = document.createElement('style');
+                        styleElement.id = styleId;
+                        styleElement.textContent = toggle.css;
+                        document.head.appendChild(styleElement);
+                    }
+                } else {
+                    if (styleElement) {
+                        styleElement.remove();
+                    }
+                }
+
+                localStorage.setItem(`water - ui - ${ toggleId } `, enabled.toString());
+                console.log(`[Water] UI toggle ${ toggle.name }: ${ enabled ? 'ON' : 'OFF' } `);
+            };
+        } catch (e) {
+            console.error('[CommunityCSSAddon] Render UI toggles error:', e);
+            const list = document.getElementById('water-ui-list');
+            if (list) list.innerHTML = `< div class="no-items-msg" style = "color: #ff5555" > Error: ${ e.message }</div > `;
+        }
+    }
+}
+
+module.exports = CommunityCSSAddon;

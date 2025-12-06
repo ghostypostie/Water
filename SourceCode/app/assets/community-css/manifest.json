@@ -1,0 +1,16 @@
+[
+    {
+        "id": "vivid-obsidian",
+        "name": "Vivid Obsidian",
+        "author": "Ghosty",
+        "filename": "Vivid Obsidian.css",
+        "thumbnail": "thumbnails/vivid-obsidian-thumb.png"
+    },
+    {
+        "id": "aiiimpact",
+        "name": "Aiiimpact",
+        "author": "7lumed",
+        "filename": "Aiiimpact.css",
+        "thumbnail": "thumbnails/aiiimpact-thumb.png"
+    }
+]
