@@ -7,21 +7,13 @@ This client aims for:
 
 ## Best Features
 
-### Quick Play (F4)
+### Better Matchmaker (F4)
 Press **F4** to instantly join a random public game with complete customization:
 - Filter by **player count** (min/max)
 - Filter by **game modes** (FFA, TDM, CTF, etc.)
+- Filter by **server regions** (MBI, TOK, FRA, etc.)
 - Filter by **remaining time**
 - **Force current region** option
-- Avoid rejoining the same game
-
-### WebSocket Ranked Matchmaking
-Click "**CLICK TO PLAY**" to queue for ranked games via direct WebSocket connection:
-- Connects to official Krunker matchmaking service
-- Real-time **queue status** updates
-- **Toggle queue** by clicking again
-- Handles **errors and cooldowns** gracefully
-- Button shows "**Leave Queue**" when active
 
 ### Twitch Chat Integration
 Display **Twitch stream chat** directly in Krunker's in-game chat:
@@ -33,11 +25,9 @@ Display **Twitch stream chat** directly in Krunker's in-game chat:
 
 ### Water Customizations
 Custom theme and UI toggle system:
-- **8 UI toggles**: Hide ADs, Terms Info, Signup Alerts, Social/Trading, Community, Games, Stream Container, Quick Match
+- **8 UI toggles**: Hide ADs, Terms Info, Signup Alerts, Hide Buttons in menuItemContainer, etc.
 - **Community CSS themes** support
 - **Scripts section** for custom functionality
-- Click outside window to close
-- Modern dark UI (#353535 background)
 
 ### Performance Optimizations
 - **Lightweight DevTools** (F12) - Opens in detached mode for minimal impact
@@ -53,14 +43,6 @@ Custom theme and UI toggle system:
 - **Resource Swapper** (Normal/Advanced modes)
 - **Chromium Flags** customization
 - **Display Mode** options (Windowed/Maximized/Fullscreen/Borderless)
-
-### Discord Bot Integration
-Share game stats with Water Discord Bot (optional):
-- **Profile statistics**
-- **Clan information**
-- **Leaderboard data**
-- **Ranked leaderboard** stats
-- Localhost-only WebSocket (no external hosting needed)
 
 ## Screenshots
 
