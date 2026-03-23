@@ -89,18 +89,22 @@ class BrowserLoader {
 		let mainWindowProps = {
 			width: 1600,
 			height: 900,
-			show: !preloadOnly, // Hide window if pre-loading
+			show: !preloadOnly,
 			title: "Water",
-			backgroundColor: "#000000", // Prevent white flash
+			backgroundColor: "#000000",
 			autoHideMenuBar: true,
 			// @ts-ignore
 			webContents,
 			webPreferences: {
 				preload: path.join(__dirname, "../preload/global.js"),
 				autoplayPolicy: "no-user-gesture-required",
-				enableRemoteModule: true, // Required for Electron 10+
-				contextIsolation: false
-				// nodeIntegrationInWorker: true
+				enableRemoteModule: true,
+				contextIsolation: false,
+				backgroundThrottling: false,
+				offscreen: false,
+				spellcheck: false,
+				v8CacheOptions: "bypassHeatCheck",
+				disableHtmlFullscreenWindowResize: true
 			}
 		};
 
@@ -151,21 +155,24 @@ class BrowserLoader {
 		const { preloadOnly = false } = options;
 		let contents = win.webContents;
 
-		// Open external links from splash in the user's default browser
-		try {
-			contents.on("new-window", (event, url) => {
-				event.preventDefault();
-				try {
-					if (/^https?:/i.test(url)) return shell.openExternal(url);
-				} catch (_) { }
-			});
-			contents.on("will-navigate", (event, url) => {
-				if (/^https?:/i.test(url)) {
+		// Open external links from splash/prompt windows in the user's default browser
+		// But NOT for web/game windows - they have their own handlers below
+		if (!isWeb) {
+			try {
+				contents.on("new-window", (event, url) => {
 					event.preventDefault();
-					try { shell.openExternal(url); } catch (_) { }
-				}
-			});
-		} catch (_) { }
+					try {
+						if (/^https?:/i.test(url)) return shell.openExternal(url);
+					} catch (_) { }
+				});
+				contents.on("will-navigate", (event, url) => {
+					if (/^https?:/i.test(url)) {
+						event.preventDefault();
+						try { shell.openExternal(url); } catch (_) { }
+					}
+				});
+			} catch (_) { }
+		}
 
 		// Always enforce a custom title and block page title changes
 		try {
@@ -245,6 +252,11 @@ class BrowserLoader {
 
 			/** @type {object} */
 			let windowStateConfig = (config.get("windowState." + windowType, {}));
+			// Normalize display mode here as well (defensive)
+			let rawMode = config && config.get ? config.get("fullscreen", "windowed") : "windowed";
+			let displayMode = (typeof rawMode === "boolean") ? (rawMode ? "fullscreen" : "windowed") : String(rawMode || "windowed");
+			if (typeof rawMode === "boolean") { try { config.set("fullscreen", displayMode); } catch (_) { } }
+			
 			// Respect display mode over prior windowState except when 'windowed'
 			if (displayMode === "fullscreen") {
 				try { if (!win.isFullScreen()) win.setFullScreen(true); } catch (_) { }
@@ -263,17 +275,60 @@ class BrowserLoader {
 
 		contents.on("new-window", (event, url, frameName, disposition, options) => {
 			event.preventDefault();
-			if (UrlUtils.locationType(url) === "external") shell.openExternal(url);
-			else if (UrlUtils.locationType(url) !== "unknown") {
+			const locType = UrlUtils.locationType(url);
+			
+			console.log('[Water] new-window event:', url, 'type:', locType);
+			
+			// ALWAYS navigate krunker.io URLs in the same window - NEVER open externally
+			if (locType === "game" || locType === "social" || locType === "viewer" || locType === "editor") {
+				console.log('[Water] Intercepted krunker.io navigation, loading in same window:', url);
+				contents.loadURL(url);
+				return;
+			}
+			
+			// Check if it's krunker.io domain even if path is unknown
+			try {
+				const urlObj = new URL(url);
+				if (/^(www|comp\.)?krunker\.io$/.test(urlObj.hostname)) {
+					console.log('[Water] Intercepted krunker.io URL (unknown path), loading in same window:', url);
+					contents.loadURL(url);
+					return;
+				}
+			} catch (_) {}
+			
+			// Open truly external links in browser
+			if (locType === "external") {
+				console.log('[Water] Opening external URL in browser:', url);
+				shell.openExternal(url);
+				return;
+			}
+			
+			// Default: load in same window if not external
+			if (locType !== "unknown") {
 				if (frameName === "_self") contents.loadURL(url);
 				else this.initWindow(url, config, /** @type {object} */(options).webContents);
 			}
 		});
 
 		contents.on("will-navigate", (event, url) => {
+			const locType = UrlUtils.locationType(url);
+			
+			// ALWAYS allow navigation to krunker.io pages in the same window
+			if (locType === "game" || locType === "social" || locType === "viewer" || locType === "editor") {
+				console.log('[Water] Allowing krunker.io navigation in same window:', url);
+				// Don't prevent - allow navigation in same window
+				return;
+			}
+			
+			// Prevent and handle non-krunker URLs
 			event.preventDefault();
-			if (UrlUtils.locationType(url) === "external") shell.openExternal(url);
-			else if (UrlUtils.locationType(url) !== "unknown") contents.loadURL(url);
+			
+			if (locType === "external") {
+				console.log('[Water] Blocking external navigation, opening in browser:', url);
+				shell.openExternal(url);
+			} else if (locType !== "unknown") {
+				contents.loadURL(url);
+			}
 		});
 
 		contents.on("will-prevent-unload", event => {
@@ -330,7 +385,8 @@ class BrowserLoader {
 			title: "Water",
 			webPreferences: {
 				preload: path.join(__dirname, "../preload/prompt.js"),
-				enableRemoteModule: true, // Required for Electron 10+
+				nodeIntegration: true,
+				enableRemoteModule: true,
 				contextIsolation: false
 			}
 		});
@@ -379,7 +435,8 @@ class BrowserLoader {
 			title: "Water",
 			webPreferences: {
 				preload: path.join(__dirname, "../preload/splash.js"),
-				enableRemoteModule: true, // Required for Electron 10+
+				nodeIntegration: true,
+				enableRemoteModule: true,
 				backgroundThrottling: false,
 				spellcheck: false,
 				contextIsolation: false
@@ -390,28 +447,34 @@ class BrowserLoader {
 
 		async function autoUpdate() {
 			return new Promise((resolve, reject) => {
-				if (shouldAutoUpdate === "skip") return resolve();
+				if (shouldAutoUpdate === "skip") {
+					// Show "Latest Version" message
+					contents.send("message", "Latest Version");
+					setTimeout(() => resolve(), 1000);
+					return;
+				}
 
 				return contents.on("dom-ready", () => {
-					contents.send("message", "Initializing the auto updater...");
+					contents.send("message", "Checking for updates...");
 					const { autoUpdater } = require("electron-updater");
 					autoUpdater.logger = log;
 
 					autoUpdater.on("error", err => {
-						console.error(err);
-						contents.send("message", "Error: " + err.name);
-						reject(`Error occurred: ${err.name}`);
+						console.error('[Water] Auto-updater error:', err);
+						// Show "Latest Version" instead of error
+						contents.send("message", "Latest Version");
+						setTimeout(() => resolve(), 1000);
 					});
 					autoUpdater.on("checking-for-update", () => contents.send("message", "Checking for update"));
 					autoUpdater.on("update-available", info => {
-						console.log(info);
+						console.log('[Water] Update available:', info);
 						contents.send("message", `Update v${info.version} available`, info.releaseDate);
 						if (shouldAutoUpdate !== "download") resolve();
 					});
 					autoUpdater.on("update-not-available", info => {
-						console.log(info);
-						contents.send("message", "No update available");
-						resolve();
+						console.log('[Water] No update available');
+						contents.send("message", "Latest Version");
+						setTimeout(() => resolve(), 1000);
 					});
 					autoUpdater.on("download-progress", info => {
 						contents.send("message", `Downloaded ${Math.floor(info.percent)}%`, Math.floor(info.bytesPerSecond / 1000) + "kB/s");
@@ -423,7 +486,15 @@ class BrowserLoader {
 					});
 
 					autoUpdater.autoDownload = shouldAutoUpdate === "download";
-					autoUpdater.checkForUpdates();
+					autoUpdater.allowPrerelease = false;
+					
+					// Check for updates with timeout
+					autoUpdater.checkForUpdates().catch(err => {
+						console.error('[Water] Update check failed:', err.message);
+						// Show "Latest Version" instead of error
+						contents.send("message", "Latest Version");
+						setTimeout(() => resolve(), 1000);
+					});
 				});
 			});
 		}
@@ -431,23 +502,11 @@ class BrowserLoader {
 		// Keep splash visible for a minimum duration (configurable, default 2000ms)
 		const splashMinMs = Math.max(0, parseInt(String((config && config.get) ? config.get("splashMinMs", 2000) : 2000), 10) || 2000);
 		if (String(shouldAutoUpdate) === "skip") {
-			// Development mode: simulate update progress and then respect min duration
-			const start = Date.now();
-			let i = 0;
-			const interval = setInterval(() => {
-				if (i > 100) {
-					clearInterval(interval);
-					const elapsed = Date.now() - start;
-					const wait = Math.max(0, splashMinMs - elapsed);
-					// Emit IPC to trigger game window show (main.js handles it)
-					setTimeout(() => {
-						contents.send('open-game');
-					}, wait);
-				} else {
-					try { contents.send("message", "Updating...", `${i}% complete`); } catch (_) { }
-					i += 10;
-				}
-			}, 400);
+			// Skip mode: Show message, but don't send open-game yet
+			// main.js will send it after game window is created
+			win.once('ready-to-show', () => {
+				contents.send("message", "Skipping Update Check");
+			});
 		} else {
 			// Production: run auto-updater in parallel with min show time
 			const minShow = new Promise(resolve => setTimeout(resolve, splashMinMs));

@@ -21,15 +21,19 @@ const baseStyles = `
 	max-height: calc(100% - 480px);
 	transform: translate(-50%, -50%);
 	z-index: 1000000;
-	overflow-y: auto;
+	overflow-y: hidden;
 	display: inline-block;
 	text-align: left;
 	pointer-events: auto;
 	padding: 20px;
-	width: 705px;
+	width: 1200px;
 	font-size: 20px;
 	background-color: #353535;
 	box-shadow: 0 9px 0 0 #a6a6a6
+}
+
+#Water-menuWindow::-webkit-scrollbar {
+	display: none;
 }
 
 /* Temporal workaround for "No settings found" appearing in Water tab all the time */

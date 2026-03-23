@@ -171,7 +171,7 @@ class CommunityCSSAddon {
                         top: 50%;
                         transform: translateY(-50%);
                         z-index: 1000001;
-                        width: 650px;
+                        width: 800px;
                         max-width: 45%;
                         max-height: 85vh;
                         background-color: #353535;
@@ -182,10 +182,10 @@ class CommunityCSSAddon {
                         display: block;
                     }
                     .waterWindow-left {
-                        left: calc(50% - 680px);
+                        left: calc(50% - 820px);
                     }
                     .waterWindow-right {
-                        right: calc(50% - 680px);
+                        right: calc(50% - 820px);
                     }
                     .waterWindowHeader {
                         background-color: rgba(0, 0, 0, 0.2);
@@ -199,6 +199,11 @@ class CommunityCSSAddon {
                         padding: 10px 20px 20px 20px;
                         max-height: calc(85vh - 60px);
                         overflow-y: auto;
+                        scrollbar-width: none;
+                        -ms-overflow-style: none;
+                    }
+                    .waterWindowContent::-webkit-scrollbar {
+                        display: none;
                     }
                     .theme-card {
                         background: rgba(30, 30, 35, 0.95);
@@ -521,49 +526,399 @@ class CommunityCSSAddon {
             const list = document.getElementById('water-scripts-list');
             if (!list) return;
 
-            const { app } = require('electron').remote || require('@electron/remote');
-            const scriptsPath = path.join(app.getPath('documents'), 'Water', 'Scripts');
+            // Check if userscripts are globally disabled
+            const Store = require('electron-store');
+            const config = new Store();
+            const userscriptsEnabled = config.get('enableUserscripts', true);
 
-            // Ensure directory exists
-            if (!fs.existsSync(scriptsPath)) {
-                list.innerHTML = '<div class="no-items-msg">No scripts directory found. Create: Documents\\Water\\Scripts</div>';
+            // If userscripts are disabled, manually read scripts folder and show them in disabled state
+            if (!userscriptsEnabled) {
+                const fs = require('fs');
+                const path = require('path');
+                const { ipcRenderer } = require('electron');
+                
+                // Get scripts path
+                ipcRenderer.invoke('get-app-info').then(info => {
+                    const userscriptsPath = String(config.get('userscriptsPath', '') || path.join(info.documentsDir, 'Water', 'Scripts'));
+                    
+                    let scriptsListHTML = '';
+                    let scriptFiles = [];
+                    
+                    // Try to read scripts directory
+                    try {
+                        if (fs.existsSync(userscriptsPath)) {
+                            scriptFiles = fs.readdirSync(userscriptsPath)
+                                .filter(file => file.endsWith('.js'));
+                        }
+                    } catch (e) {
+                        console.error('[Water] Failed to read scripts directory:', e);
+                    }
+                    
+                    // Show scripts if they exist
+                    if (scriptFiles.length > 0) {
+                        scriptsListHTML = scriptFiles.map(scriptFile => {
+                            const scriptId = scriptFile.replace('.js', '');
+                            
+                            // Try to read script metadata
+                            let scriptName = scriptFile;
+                            let scriptAuthor = '';
+                            let scriptVersion = '';
+                            let scriptDesc = '';
+                            
+                            try {
+                                const scriptPath = path.join(userscriptsPath, scriptFile);
+                                const content = fs.readFileSync(scriptPath, 'utf-8');
+                                
+                                // Parse metadata if present
+                                if (content.includes('// ==UserScript==') && content.includes('// ==/UserScript==')) {
+                                    const metaMatch = content.match(/\/\/ ==UserScript==([\s\S]*?)\/\/ ==\/UserScript==/);
+                                    if (metaMatch) {
+                                        const metaBlock = metaMatch[1];
+                                        
+                                        const nameMatch = metaBlock.match(/\/\/ @name\s+(.+)/);
+                                        if (nameMatch) scriptName = nameMatch[1].trim();
+                                        
+                                        const authorMatch = metaBlock.match(/\/\/ @author\s+(.+)/);
+                                        if (authorMatch) scriptAuthor = ` by ${authorMatch[1].trim()}`;
+                                        
+                                        const versionMatch = metaBlock.match(/\/\/ @version\s+(.+)/);
+                                        if (versionMatch) scriptVersion = ` v${versionMatch[1].trim()}`;
+                                        
+                                        const descMatch = metaBlock.match(/\/\/ @desc\s+(.+)/);
+                                        if (descMatch) scriptDesc = descMatch[1].trim();
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('[Water] Failed to read script metadata:', e);
+                            }
+                            
+                            return `
+                                <div class="settNameSmall script-item" style="display: block; margin-bottom: 15px; padding: 15px; background: rgba(255, 255, 255, 0.03); border-radius: 6px; opacity: 0.5;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <div style="display: flex; align-items: center; flex: 1;">
+                                            <div style="display: flex; flex-direction: column;">
+                                                <span class="script-name">${scriptName}${scriptAuthor}${scriptVersion}</span>
+                                                ${scriptDesc ? `<span style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">${scriptDesc}</span>` : ''}
+                                            </div>
+                                        </div>
+                                        <label class="switch" style="margin: 0; opacity: 0.3; pointer-events: none;">
+                                            <input type="checkbox" disabled>
+                                            <span class="slider"><span class="grooves"></span></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    } else {
+                        scriptsListHTML = '<div class="no-items-msg" style="margin-top: 15px;">No scripts found. Place .js files in Documents\\Water\\Scripts</div>';
+                    }
+                    
+                    list.innerHTML = `
+                        <div style="background: rgba(255, 100, 100, 0.15); border: 1px solid rgba(255, 100, 100, 0.3); border-radius: 6px; padding: 15px; margin-bottom: 20px; margin-top: 15px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <span class="material-icons" style="color: #ff6464; font-size: 24px;">warning</span>
+                                <span style="color: #ff6464; font-weight: 600; font-size: 15px;">Userscripts Disabled</span>
+                            </div>
+                            <div style="color: rgba(255,255,255,0.8); font-size: 13px; line-height: 1.5;">
+                                Enable them from Settings > Water > Maintenance > Enable Userscripts
+                            </div>
+                        </div>
+                        <div style="pointer-events: none;">
+                            ${scriptsListHTML}
+                        </div>
+                    `;
+                }).catch(e => {
+                    console.error('[Water] Failed to get app info:', e);
+                    list.innerHTML = `<div class="no-items-msg" style="color: #ff5555">Error loading scripts: ${e.message}</div>`;
+                });
+                
                 return;
             }
 
-            // Read all .js files
-            const files = fs.readdirSync(scriptsPath)
-                .filter(f => f.endsWith('.js'))
-                .sort();
+            // Get userscripts from the loader (when enabled)
+            const { su } = require('./userscript-manager/userscript-loader');
 
-            if (files.length === 0) {
+            // Check if userscripts are loaded
+            if (!su.userscripts || su.userscripts.length === 0) {
                 list.innerHTML = '<div class="no-items-msg">No scripts found. Place .js files in Documents\\Water\\Scripts</div>';
                 return;
             }
 
-            list.innerHTML = files.map(filename => {
-                const scriptId = filename.replace('.js', '');
-                const savedState = localStorage.getItem(`water-script-${scriptId}`);
-                // Default to enabled if no setting exists
-                const isEnabled = savedState === null ? true : savedState === 'true';
-
+            // Helper to validate and render setting controls
+            const renderSettingControl = (settingKey, setting, scriptName) => {
+                const settingId = `water-script-setting-${scriptName}-${settingKey}`;
+                
+                // Validate setting structure
+                if (!setting || typeof setting !== 'object') return '';
+                if (!setting.title || !setting.type || setting.value === undefined) return '';
+                if (typeof setting.changed !== 'function') return '';
+                
+                let controlHTML = '';
+                const tip = setting.desc || '';
+                
+                switch (setting.type) {
+                    case 'bool':
+                        if (typeof setting.value !== 'boolean') return '';
+                        controlHTML = `
+                            <label class="switch" style="margin: 0;">
+                                <input type="checkbox" id="${settingId}" 
+                                       ${setting.value ? 'checked' : ''} 
+                                       onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.checked)">
+                                <span class="slider"><span class="grooves"></span></span>
+                            </label>
+                        `;
+                        break;
+                        
+                    case 'num':
+                        if (typeof setting.value !== 'number') return '';
+                        const min = setting.min !== undefined ? setting.min : 0;
+                        const max = setting.max !== undefined ? setting.max : 100;
+                        const step = setting.step !== undefined ? setting.step : 1;
+                        controlHTML = `
+                            <div style="display: flex; align-items: center; gap: 12px; min-width: 250px;">
+                                <input type="range" id="${settingId}" 
+                                       min="${min}" max="${max}" step="${step}" 
+                                       value="${setting.value}" 
+                                       class="sliderVal" style="flex: 1;" 
+                                       oninput="document.getElementById('${settingId}-value').textContent=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value))">
+                                <span id="${settingId}-value" style="min-width: 45px; text-align: right; color: rgba(255,255,255,0.9); font-weight: 500; font-size: 14px;">
+                                    ${setting.value}
+                                </span>
+                            </div>
+                        `;
+                        break;
+                        
+                    case 'sel':
+                        if (!Array.isArray(setting.opts) || setting.opts.length < 2) return '';
+                        if (!setting.opts.includes(setting.value)) return '';
+                        controlHTML = `
+                            <select id="${settingId}" 
+                                    class="inputGrey2" 
+                                    style="min-width: 150px; padding: 8px 12px;"
+                                    onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
+                                ${setting.opts.map(opt => `<option value="${opt}" ${opt === setting.value ? 'selected' : ''}>${opt}</option>`).join('')}
+                            </select>
+                        `;
+                        break;
+                        
+                    case 'color':
+                        if (typeof setting.value !== 'string' || !setting.value.match(/^#([0-9a-fA-F]{3}){2}$/)) return '';
+                        controlHTML = `
+                            <input type="color" id="${settingId}" 
+                                   value="${setting.value}" 
+                                   style="width: 50px; height: 32px; border: 2px solid rgba(255,255,255,0.2); border-radius: 4px; background: transparent; cursor: pointer;" 
+                                   onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
+                        `;
+                        break;
+                        
+                    case 'keybind':
+                        if (typeof setting.value !== 'object' || Array.isArray(setting.value)) return '';
+                        if (typeof setting.value.alt !== 'boolean' || typeof setting.value.ctrl !== 'boolean' || 
+                            typeof setting.value.shift !== 'boolean' || typeof setting.value.key !== 'string') return '';
+                        const kb = setting.value;
+                        const modifiers = [
+                            kb.ctrl ? 'Ctrl' : '',
+                            kb.alt ? 'Alt' : '',
+                            kb.shift ? 'Shift' : ''
+                        ].filter(m => m).join(' + ');
+                        const displayKey = modifiers ? `${modifiers} + ${kb.key.toUpperCase()}` : kb.key.toUpperCase();
+                        controlHTML = `
+                            <button id="${settingId}" 
+                                    class="inputGrey2" 
+                                    style="min-width: 120px; padding: 8px 12px; cursor: pointer;"
+                                    onclick="window.recordKeybind('${scriptName}', '${settingKey}', this)">
+                                ${displayKey}
+                            </button>
+                        `;
+                        break;
+                        
+                    default:
+                        return '';
+                }
+                
                 return `
-                    <div class="settNameSmall script-item">
-                        <span class="script-name">${filename}</span>
-                        <label class="switch" style="margin-left: 10px;">
-                            <input type="checkbox" id="water-script-${scriptId}" 
-                                   ${isEnabled ? 'checked' : ''} 
-                                   onchange="window.toggleWaterScript('${scriptId}', this.checked)">
-                            <span class="slider"><span class="grooves"></span></span>
-                        </label>
+                    <div class='settName' style='margin: 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);'${tip ? ` title='${tip.replace(/'/g, "&apos;")}'` : ''}>
+                        <span style="color: rgba(255,255,255,0.85); font-size: 14px;">${setting.title}</span>
+                        <span>${controlHTML}</span>
+                    </div>
+                `;
+            };
+
+            list.innerHTML = su.userscripts.map(script => {
+                const scriptId = script.name.replace('.js', '');
+                
+                // Get enabled state from electron-store
+                const Store = require('electron-store');
+                const config = new Store();
+                const isEnabled = config.get(`userscripts.${script.name}.enabled`, true);
+                
+                const dropdownId = `water-script-settings-${scriptId}`;
+                
+                // Get script metadata
+                const scriptName = (script.meta && script.meta.name) || script.name;
+                const scriptAuthor = (script.meta && script.meta.author) ? ` by ${script.meta.author}` : '';
+                const scriptVersion = (script.meta && script.meta.version) ? ` v${script.meta.version}` : '';
+                const scriptDesc = (script.meta && script.meta.desc) || '';
+                
+                // Check if script has settings
+                const hasSettings = script.settings && Object.keys(script.settings).length > 0;
+                
+                // Config arrow button (only show if script has settings)
+                const configArrow = hasSettings ? `
+                    <span class="material-icons-outlined" 
+                          id="arrow-${scriptId}" 
+                          style="font-size: 24px; cursor: pointer; color: rgba(255,255,255,0.6); transition: all 0.2s; margin-right: 12px;"
+                          onmouseover="this.style.color='rgba(255,255,255,0.9)'"
+                          onmouseout="this.style.color='rgba(255,255,255,0.6)'">
+                        keyboard_arrow_right
+                    </span>
+                ` : '';
+                
+                let settingsHTML = '';
+                if (hasSettings) {
+                    const settingsContent = Object.keys(script.settings)
+                        .map(key => renderSettingControl(key, script.settings[key], script.name))
+                        .filter(html => html)
+                        .join('');
+                    
+                    if (settingsContent) {
+                        settingsHTML = `
+                            <div id="${dropdownId}" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
+                                ${settingsContent}
+                            </div>
+                        `;
+                    }
+                }
+                
+                return `
+                    <div class="settNameSmall script-item" style="display: block; margin-bottom: 15px; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 6px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; flex: 1; cursor: ${hasSettings ? 'pointer' : 'default'};" 
+                                 ${hasSettings ? `onclick="window.toggleScriptSettings('${scriptId}')"` : ''}>
+                                ${configArrow}
+                                <div style="display: flex; flex-direction: column;">
+                                    <span class="script-name">${scriptName}${scriptAuthor}${scriptVersion}</span>
+                                    ${scriptDesc ? `<span style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">${scriptDesc}</span>` : ''}
+                                </div>
+                            </div>
+                            <label class="switch" style="margin: 0;" onclick="event.stopPropagation();">
+                                <input type="checkbox" id="water-script-${scriptId}" 
+                                       ${isEnabled ? 'checked' : ''} 
+                                       onchange="window.toggleWaterScript('${script.name}', this.checked)">
+                                <span class="slider"><span class="grooves"></span></span>
+                            </label>
+                        </div>
+                        ${settingsHTML}
                     </div>
                 `;
             }).join('');
-
+            
             // Define toggle function
-            window.toggleWaterScript = (scriptId, enabled) => {
-                localStorage.setItem(`water-script-${scriptId}`, enabled.toString());
-                console.log(`[Water] Script ${scriptId}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+            window.toggleWaterScript = (scriptName, enabled) => {
+                const Store = require('electron-store');
+                const config = new Store();
+                
+                // Save to electron-store
+                config.set(`userscripts.${scriptName}.enabled`, enabled);
+                console.log(`[Water] Script ${scriptName}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
                 console.log('[Water] Restart client to apply script changes');
+            };
+            
+            // Define settings dropdown toggle function
+            window.toggleScriptSettings = (scriptId) => {
+                const dropdown = document.getElementById(`water-script-settings-${scriptId}`);
+                const arrow = document.getElementById(`arrow-${scriptId}`);
+                if (dropdown && arrow) {
+                    const isHidden = dropdown.style.display === 'none';
+                    dropdown.style.display = isHidden ? 'block' : 'none';
+                    arrow.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+                }
+            };
+            
+            // Define setting update function
+            window.updateScriptSetting = (scriptName, settingKey, value) => {
+                const fs = require('fs');
+                const path = require('path');
+                const { su } = require('./userscript-manager/userscript-loader');
+                
+                // Find the script
+                const script = su.userscripts.find(s => s.name === scriptName);
+                if (!script || !script.settings || !script.settings[settingKey]) {
+                    console.error('[Water] Setting not found:', scriptName, settingKey);
+                    return;
+                }
+                
+                // Update the setting value
+                script.settings[settingKey].value = value;
+                
+                // Call the changed callback
+                if (typeof script.settings[settingKey].changed === 'function') {
+                    try {
+                        script.settings[settingKey].changed(value);
+                        console.log(`[Water] Setting updated: ${scriptName} > ${settingKey} = ${value}`);
+                    } catch (e) {
+                        console.error('[Water] Error calling setting changed callback:', e);
+                    }
+                }
+                
+                // Save to preferences file
+                try {
+                    const settingsPath = script.settingsPath;
+                    let savedSettings = {};
+                    
+                    // Read existing settings if file exists
+                    if (fs.existsSync(settingsPath)) {
+                        try {
+                            savedSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+                        } catch (e) {
+                            console.warn('[Water] Failed to read existing settings, creating new file');
+                        }
+                    }
+                    
+                    // Update the setting
+                    savedSettings[settingKey] = value;
+                    
+                    // Write back to file
+                    fs.writeFileSync(settingsPath, JSON.stringify(savedSettings, null, 2), { encoding: 'utf-8' });
+                } catch (e) {
+                    console.error('[Water] Failed to save setting to file:', e);
+                }
+            };
+            
+            // Define keybind recording function
+            window.recordKeybind = (scriptName, settingKey, button) => {
+                button.textContent = 'Press any key...';
+                button.style.background = 'rgba(255, 255, 0, 0.2)';
+                
+                const handleKeyPress = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const keybind = {
+                        ctrl: e.ctrlKey,
+                        alt: e.altKey,
+                        shift: e.shiftKey,
+                        key: e.key
+                    };
+                    
+                    // Update display
+                    const modifiers = [
+                        keybind.ctrl ? 'Ctrl' : '',
+                        keybind.alt ? 'Alt' : '',
+                        keybind.shift ? 'Shift' : ''
+                    ].filter(m => m).join(' + ');
+                    const displayKey = modifiers ? `${modifiers} + ${keybind.key.toUpperCase()}` : keybind.key.toUpperCase();
+                    button.textContent = displayKey;
+                    button.style.background = '';
+                    
+                    // Update setting
+                    window.updateScriptSetting(scriptName, settingKey, keybind);
+                    
+                    // Remove listener
+                    document.removeEventListener('keydown', handleKeyPress, true);
+                };
+                
+                document.addEventListener('keydown', handleKeyPress, true);
             };
         } catch (e) {
             console.error('[CommunityCSSAddon] Render scripts error:', e);
@@ -584,7 +939,11 @@ class CommunityCSSAddon {
             { id: 'hideCommunity', name: 'Hide Community Button', css: '.menuItem:nth-child(6) {display: none;}', defaultOn: false },
             { id: 'hideGames', name: 'Hide Games Button', css: '.menuItem:nth-child(7) {display: none;}', defaultOn: false },
             { id: 'hideStream', name: 'Hide Old & New Stream Container', css: '#streamContainer, #streamContainerNew {display: none !important;}', defaultOn: false },
-            { id: 'hideQuickMatch', name: 'Hide Quick Match Button', css: '#menuBtnQuickMatch {display: none !important;}', defaultOn: true }
+            { id: 'hideQuickMatch', name: 'Hide Quick Match Button', css: '#menuBtnQuickMatch {display: none !important;}', defaultOn: true },
+            { id: 'hideLeaderboardButton', name: 'Hide Leaderboard Button', css: '.icon-button.svelte-wmukcv {display: none !important;}', defaultOn: true },
+            { id: 'hideTurfWars', name: 'Hide Turf Wars', css: '.main-menu-button-container.svelte-f3amho[style="top: 92px; left: 520px; --border-color:#00B1FF;"] {display: none !important;}', defaultOn: true },
+            { id: 'hideNewMarket', name: 'Hide New Market', css: '.main-menu-button-container.svelte-f3amho[style="top: 282px; left: 520px; --border-color:#e39e1d;"] {display: none !important;}', defaultOn: true },
+            { id: 'hideDoubleXP', name: 'Hide Double XP', css: '#doubleXPButton {display: none !important;}', defaultOn: true }
         ];
     }
 

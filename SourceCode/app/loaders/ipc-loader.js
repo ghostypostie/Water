@@ -7,8 +7,6 @@ let { exec } = require("child_process");
 let BrowserLoader = require("./browser-loader");
 let RPCHandler = require("../modules/rpc-handler");
 
-let botClientInstance = null;
-
 class IpcLoader {
     /**
      * Initializes IPC event handlers
@@ -44,13 +42,6 @@ class IpcLoader {
 
         // Recording system IPC handlers
         this.setupRecordingHandlers(config);
-
-        // Bot setting change handler
-        ipcMain.on("bot-setting-changed", (_event, enabled) => {
-            if (botClientInstance) {
-                botClientInstance.onSettingChanged(enabled);
-            }
-        });
 
         // Matchmaker trigger handler
         ipcMain.on("trigger-matchmaker", () => {
@@ -98,7 +89,7 @@ class IpcLoader {
      */
     static initRpc(config) {
         let rpcHandler = new RPCHandler(
-            "770954802443059220",
+            "1310915417312722984",
             /** @type {boolean} */
             (config.get("discordRPC", true))
         );
@@ -116,20 +107,24 @@ class IpcLoader {
             }
         });
 
-        ipcMain.on("bot-token-update", (event, token) => {
-            if (botClientInstance) {
-                botClientInstance.updateToken(token);
-            }
-        });
-
-        ipcMain.on("bot-player-name-update", (event, name) => {
-            if (botClientInstance) {
-                botClientInstance.updatePlayerName(name);
-            }
-        });
-
         app.once("ready", async () => await rpcHandler.start());
-        app.on("quit", async () => await rpcHandler.end());
+        
+        // Clean up RPC before quit to avoid connection errors
+        app.on("before-quit", async () => {
+            try {
+                await rpcHandler.end();
+            } catch (e) {
+                // Silently ignore errors during shutdown
+            }
+        });
+        
+        app.on("quit", async () => {
+            try {
+                await rpcHandler.end();
+            } catch (e) {
+                // Silently ignore errors during shutdown
+            }
+        });
     }
 
     /**

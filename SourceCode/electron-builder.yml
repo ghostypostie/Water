@@ -6,22 +6,36 @@ asarUnpack:
   - "**/node_modules/ffmpeg-static/**"
 win:
   icon: build/icon.ico
-  artifactName: ${productName}-Setup.${ext}
   target:
     - target: nsis
       arch:
         - x64
 nsis:
   oneClick: false
-  perMachine: true
-  allowToChangeInstallationDirectory: true
-  runAfterFinish: true
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: false
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
-  installerSidebar: build/bg.bmp
-  uninstallerSidebar: build/bg.bmp
-  differentialPackage: false
-  artifactName: ${productName}-Setup.${ext}
+  warningsAsErrors: false
+  artifactName: Water.exe
+mac:
+  icon: build/icon.png
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+dmg:
+  contents:
+    - x: 110
+      y: 150
+      type: file
+      path: null
+    - x: 240
+      y: 150
+      type: link
+      path: /Applications
 extraResources:
   - from: app/default-swaps
     to: defaults
@@ -41,7 +55,10 @@ files:
   - "!**/{appveyor.yml,.travis.yml,circle.yml,.github}"
   - "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
   - "!dev-app-update.yml"
-# compression: store
+  - "!BUILD.md"
+directories:
+  buildResources: build
+  output: dist
 publish:
   - provider: github
     owner: ghostypostie

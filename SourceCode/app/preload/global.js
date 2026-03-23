@@ -5,7 +5,7 @@ let path = require("path");
 require("v8-compile-cache");
 
 let Events = require("events");
-let { ipcRenderer } = require("electron");
+let { ipcRenderer, remote } = require("electron");
 let Store = require("electron-store");
 let log = require("electron-log");
 
@@ -13,7 +13,8 @@ let UrlUtils = require("../utils/url-utils");
 let UserscriptInitiator = require("../modules/userscript-manager/userscript-initiator");
 let UtilManager = require("../modules/util-manager");
 
-const config = new Store();
+// Fix electron-store for Electron 10 with minimal webPreferences
+const config = new Store({ cwd: remote.app.getPath('userData') });
 
 Object.assign(console, log.functions);
 localStorage.setItem("logs", "true");
@@ -90,8 +91,8 @@ let rpcIntervalId;
 function setFocusEvent() {
 	window.addEventListener("focus", () => {
 		let rpcActivity = {
-			largeImageKey: "Water-logo",
-			largeImageText: "Water client"
+			largeImageKey: "logo",
+			largeImageText: "Water Client"
 		};
 
 		function sendRPCGamePresence() {
@@ -155,22 +156,11 @@ ipcRenderer.on("rpc-stop", () => {
 
 ipcRenderer.invoke("get-app-info")
 	.then(info => {
-		// let oldConsole = {};
-		// Object.assign(oldConsole, console);
 		const initalize = async () => {
-			// Object.assign(console, oldConsole);
 			UtilManager.instance.clientUtils.initUtil();
-
-			if (config.get("enableUserscripts", true)) {
-				const initiator = new UserscriptInitiator(
-					config,
-					String(config.get("userscriptsPath", "") || path.join(info.documentsDir, "Water", "Scripts")),
-					UtilManager.instance.clientUtils
-				);
-
-				await initiator.loadScripts(windowType);
-				initiator.executeScripts();
-			}
+			
+			// Note: Userscripts are now initialized in game.js
+			// This ensures they run in the proper renderer context with correct timing
 		};
 
 		(windowType === "game")
@@ -184,7 +174,7 @@ window.addEventListener("unload", () => {
 	ipcRenderer.invoke("rpc-activity", {
 		state: "Idle",
 		startTimestamp: Math.floor(Date.now() / 1000),
-		largeImageKey: "Water-logo",
-		largeImageText: "Water client"
+		largeImageKey: "logo",
+		largeImageText: "Water Client"
 	});
 });

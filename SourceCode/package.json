@@ -1,6 +1,6 @@
 {
   "name": "Water",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Fresh Water",
   "main": "./app/main.js",
   "private": true,
@@ -10,8 +10,8 @@
     "startd": "npm start -- --debug",
     "startd-linux": "ELECTRON_ENABLE_STACK_DUMPING=1 ELECTRON_ENABLE_LOGGING=true npm start -- --debug",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "release": "electron-builder",
+    "dist": "electron-builder --win && powershell -Command \"Remove-Item 'dist/win-unpacked' -Recurse -Force -ErrorAction SilentlyContinue\"",
+    "release": "npm run dist",
     "postinstall": "cross-env GYP_DEFINES=openssl_fips= npm_config_openssl_fips= electron-builder install-app-deps"
   },
   "repository": {
@@ -34,20 +34,21 @@
     "@babel/plugin-proposal-private-methods": "^7.13.0",
     "@types/node": "^12.20.55",
     "cross-env": "^7.0.3",
-    "electron": "^10.4.7",
-    "electron-builder": "^23.6.0",
+    "electron": "10.4.7",
+    "electron-builder": "^22.11.7",
     "eslint": "^8.7.0"
   },
   "dependencies": {
     "axios": "^0.27.2",
     "discord-rpc": "^4.0.1",
     "electron-localshortcut": "^3.2.1",
-    "electron-log": "^4.3.5",
-    "electron-store": "^8.0.0",
-    "electron-updater": "^5.0.0",
-    "ffmpeg-static": "^5.2.0",
+    "electron-log": "^4.4.8",
+    "electron-store": "^6.0.1",
+    "electron-updater": "4.3.9",
+    "ffmpeg-static": "^4.4.1",
+    "sharp": "^0.34.5",
     "v8-compile-cache": "^2.3.0",
-    "ws": "^8.18.3",
+    "ws": "^7.5.9",
     "yargs": "^17.1.1"
   }
 }

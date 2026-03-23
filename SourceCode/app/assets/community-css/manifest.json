@@ -1,10 +1,10 @@
 [
     {
-        "id": "vivid-obsidian",
-        "name": "Vivid Obsidian",
-        "author": "Ghosty",
-        "filename": "Vivid Obsidian.css",
-        "thumbnail": "thumbnails/vivid-obsidian-thumb.png"
+        "id": "mtz",
+        "name": "MTZ Client Theme",
+        "author": "Mashtoolz",
+        "filename": "MTZ.css",
+        "thumbnail": "thumbnails/mtz-thumb.png"
     },
     {
         "id": "aiiimpact",
@@ -12,5 +12,12 @@
         "author": "7lumed",
         "filename": "Aiiimpact.css",
         "thumbnail": "thumbnails/aiiimpact-thumb.png"
+    },
+    {
+        "id": "fpsboost",
+        "name": "FPS Boost",
+        "author": "Ghosty",
+        "filename": "fpsboost.css",
+        "thumbnail": "thumbnails/fpsboost-thumb.png"
     }
 ]

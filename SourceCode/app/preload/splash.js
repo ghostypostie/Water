@@ -1,4 +1,4 @@
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, shell } = require('electron');
 
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -7,6 +7,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const versionEl = document.getElementById('version');
     if (versionEl) {
       versionEl.textContent = `Version ${info.version}`;
+    }
+  });
+
+  // Handle external link clicks (Discord invites, etc.)
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('a[href^="http"]');
+    if (target) {
+      e.preventDefault();
+      const url = target.getAttribute('href');
+      console.log('[Splash] Opening external link:', url);
+      shell.openExternal(url).catch(err => {
+        console.error('[Splash] Failed to open link:', err);
+      });
     }
   });
 

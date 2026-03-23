@@ -1,21 +1,20 @@
 "use strict";
 
-// Clan Colorizer: applies configured colors to clan tags in the Krunker UI
-
 const tagConfig = require("../exports/clan-tags");
 
-// Selectors covering leaderboard and player list name tag spans
-const SELECTORS = 
-	".leaderNameM span, .leaderName span, .newLeaderNameM span, .newLeaderName span, .pListName span, .endTableN span";
+const SELECTORS = [
+	".leaderNameM span", ".leaderNameF span", ".leaderName span",
+	".newLeaderNameM span", ".newLeaderNameF span", ".newLeaderName span",
+	".pListName span", ".endTableN span",
+	".playerName span", ".scoreNameItem span",
+	".killCardName span", ".spectatorName span",
+	"[class*='Name'] span", "[class*='name'] span"
+].join(", ");
 
 function normalizeTag(tag) {
-	return String(tag || "")
-		.replace(/^\[|\]$/g, "") // strip surrounding brackets if present
-		.trim()
-		.toUpperCase();
+	return String(tag || "").replace(/^\[|\]$/g, "").trim().toUpperCase();
 }
 
-// Build a normalized tag->color map (case-insensitive keys)
 const TAG_COLORS = Object.create(null);
 for (const [rawTag, color] of Object.entries(tagConfig || {})) {
 	const key = normalizeTag(rawTag);
@@ -27,48 +26,75 @@ function colorForText(text) {
 	return key && TAG_COLORS[key] ? TAG_COLORS[key] : null;
 }
 
+// Apply color to a single span element
+function colorElement(el) {
+	const txt = (el.textContent || "").trim();
+	if (!txt) return;
+	const color = colorForText(txt);
+	if (!color) return;
+	// Always force-apply - Krunker may have reset the style
+	el.style.setProperty("color", color, "important");
+	el.dataset.clanColorized = color;
+}
+
 function applyColors(root = document) {
 	try {
-		const nodes = root.querySelectorAll(SELECTORS);
-		nodes.forEach(el => {
-			const txt = (el.textContent || "").trim();
-			if (!txt) return;
-			const color = colorForText(txt);
-			if (color) el.style.setProperty("color", color, "important");
-		});
-	}
-	catch (err) {
+		root.querySelectorAll(SELECTORS).forEach(colorElement);
+	} catch (err) {
 		console.log("[ClanColorizer] applyColors error:", err);
 	}
 }
 
 let observer = null;
-let scheduled = false;
-function scheduleApply() {
-	if (scheduled) return;
-	scheduled = true;
-	requestAnimationFrame(() => {
-		scheduled = false;
-		applyColors();
-	});
-}
+let isInitialized = false;
 
 function init() {
-	// Run once immediately
+	if (isInitialized) return;
+	isInitialized = true;
+	console.log("[ClanColorizer] Initializing with tags:", Object.keys(TAG_COLORS));
+
 	applyColors();
 
-	// Observe DOM changes since leaderboard / player list updates frequently
 	try {
-		if (observer) observer.disconnect();
-		observer = new MutationObserver(scheduleApply);
-		observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-		window.addEventListener("unload", () => {
-			try { observer && observer.disconnect(); } catch (_) { /* noop */ }
+		observer = new MutationObserver((mutations) => {
+			for (const mutation of mutations) {
+				if (mutation.type === 'childList') {
+					for (const node of mutation.addedNodes) {
+						if (node.nodeType !== 1) continue;
+						const el = /** @type {Element} */ (node);
+						// If the added node itself matches or contains matches, color immediately
+						if (el.matches && el.matches(SELECTORS)) {
+							colorElement(el);
+						} else if (el.querySelector) {
+							el.querySelectorAll(SELECTORS).forEach(colorElement);
+						}
+					}
+				} else if (mutation.type === 'characterData') {
+					// Text changed inside a span - re-color the parent span
+					const parent = mutation.target.parentElement;
+					if (parent && parent.matches && parent.matches(SELECTORS)) {
+						colorElement(parent);
+					}
+				}
+			}
 		});
-	}
-	catch (err) {
+
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true,
+			characterData: true
+		});
+
+		window.addEventListener("unload", cleanup);
+		console.log("[ClanColorizer] Initialized");
+	} catch (err) {
 		console.log("[ClanColorizer] init error:", err);
 	}
 }
 
-module.exports = { init };
+function cleanup() {
+	if (observer) { observer.disconnect(); observer = null; }
+	isInitialized = false;
+}
+
+module.exports = { init, cleanup };

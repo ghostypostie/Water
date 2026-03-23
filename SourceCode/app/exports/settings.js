@@ -44,6 +44,42 @@ module.exports = {
 		info: "URL to hosts file for ad blocking"
 	},
 
+	// Ranked settings
+	autoFocusRanked: {
+		name: "Auto-Focus on Match Found",
+		id: "autoFocusRanked",
+		cat: "Ranked",
+		type: "checkbox",
+		val: true,
+		html() {
+			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
+		},
+		info: "Automatically brings the game window to focus when a match is found"
+	},
+	instaLockClass: {
+		name: "Insta-Lock Class",
+		id: "instaLockClass",
+		cat: "Ranked",
+		type: "select",
+		options: {
+			"-1": "Disabled",
+			"0": "Triggerman (Assault Rifle)",
+			"1": "Hunter (Sniper)",
+			"2": "Run N Gun (SMG)",
+			"3": "Spray N Pray (LMG)",
+			"5": "Detective (Revolver)",
+			"6": "Marksman (Semi)",
+			"8": "Agent (UZI)",
+			"12": "Commando (Famas)",
+			"13": "Trooper (Blaster)"
+		},
+		val: "-1",
+		html() {
+			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
+		},
+		info: "Automatically select this class when a ranked match is found"
+	},
+
 	// Better Matchmaker settings
 	betterMatchmaker_enabled: {
 		name: "Enable Better Matchmaker",
@@ -167,6 +203,56 @@ module.exports = {
 		},
 		info: "Enables the use of the GPU to perform 2d canvas rendering instead of using software rendering."
 	},
+	removeAnimations: {
+		name: "Remove Animations",
+		id: "removeAnimations",
+		cat: "Performance",
+		type: "checkbox",
+		val: false,
+		html() {
+			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
+		},
+		info: "Disables all CSS animations and transitions in Krunker and the client UI for a potential FPS boost.",
+		set: (val) => {
+			const STYLE_ID = 'water-no-animations';
+			if (val) {
+				if (!document.getElementById(STYLE_ID)) {
+					const style = document.createElement('style');
+					style.id = STYLE_ID;
+					style.textContent = `
+*, *::before, *::after {
+  animation: none !important;
+  animation-name: none !important;
+  animation-duration: 0.001ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  animation-play-state: paused !important;
+  animation-fill-mode: none !important;
+  transition: none !important;
+  transition-duration: 0.001ms !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}`;
+					document.head.appendChild(style);
+				}
+			} else {
+				const el = document.getElementById(STYLE_ID);
+				if (el) el.remove();
+			}
+		}
+	},
+    enablePerformanceOptimizations: {
+        name: "Performance Mode",
+        id: "enablePerformanceOptimizations",
+        cat: "Performance",
+        type: "checkbox",
+        val: true,
+        needsRestart: true,
+        html() {
+            return UtilManager.instance.clientUtils.genCSettingsHTML(this);
+        },
+        info: "Enables advanced performance tweaks (Uncapped FPS, Lower Latency, GPU Rasterization)"
+    },
 	angleBackend: {
 		name: "ANGLE Graphics Backend",
 		id: "angleBackend",
@@ -183,7 +269,7 @@ module.exports = {
 			vulkan: "Vulkan (Windows, Linux)",
 			metal: "Metal (MacOS-Only)"
 		},
-		val: "default",
+		val: "d3d11",
 		needsRestart: true,
 		html() {
 			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
@@ -207,6 +293,18 @@ module.exports = {
 			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
 		},
 		info: "Forces color profile."
+	},
+	debugLogging: {
+		name: "Debug Logging",
+		id: "debugLogging",
+		cat: "Chromium",
+		type: "checkbox",
+		val: false,
+		needsRestart: true,
+		html() {
+			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
+		},
+		info: "Enable detailed console logging for debugging. Disable for cleaner console output."
 	},
 	inProcessGPU: {
 		name: "In-Process GPU",
@@ -285,11 +383,60 @@ module.exports = {
 			borderless: "Borderless"
 		},
 		val: "windowed",
-		needsRestart: true,
+		needsRestart: false,
 		html() {
 			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
 		},
-		info: "Start in Windowed/Maximized/Fullscreen/Borderless mode. Use 'borderless' if you have client-capped fps and unstable fps in fullscreen."
+		info: "Start in Windowed/Maximized/Fullscreen/Borderless mode. Use 'borderless' if you have client-capped fps and unstable fps in fullscreen.",
+		set: (val) => {
+			const { remote } = require('electron');
+			const win = remote.getCurrentWindow();
+			const { screen } = remote;
+			
+			try {
+				switch (val) {
+					case "fullscreen":
+						if (!win.isFullScreen()) {
+							win.setFullScreen(true);
+						}
+						break;
+					case "maximized":
+						if (win.isFullScreen()) {
+							win.setFullScreen(false);
+						}
+						if (!win.isMaximized()) {
+							win.maximize();
+						}
+						break;
+					case "borderless":
+						if (win.isFullScreen()) {
+							win.setFullScreen(false);
+						}
+						const bounds = screen.getPrimaryDisplay().bounds;
+						win.setFullScreenable(false);
+						win.setBounds({
+							x: 0,
+							y: 0,
+							width: bounds.width,
+							height: bounds.height
+						});
+						win.moveTop();
+						break;
+					case "windowed":
+					default:
+						if (win.isFullScreen()) {
+							win.setFullScreen(false);
+						}
+						if (win.isMaximized()) {
+							win.unmaximize();
+						}
+						win.setFullScreenable(true);
+						break;
+				}
+			} catch (e) {
+				console.error('[Water] Failed to change display mode:', e);
+			}
+		}
 	},
 	discordRPC: {
 		name: "Discord Rich Presence",
@@ -309,14 +456,13 @@ module.exports = {
 		type: "checkbox",
 		val: false,
 		disabled: true,
+		hide: true, // Hidden from settings UI
 		html() {
 			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
 		},
 		info: "Share game stats and access token with Tron Discord Bot (localhost only)",
 		set: (val) => {
-			// Notify main process about setting change
-			const { ipcRenderer } = require("electron");
-			ipcRenderer.send("bot-setting-changed", val);
+			// Disabled - no longer functional
 		}
 	},
 	autoUpdate: {

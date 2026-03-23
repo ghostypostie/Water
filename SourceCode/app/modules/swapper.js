@@ -4,6 +4,100 @@ let fs = require("fs");
 let path = require("path");
 const DEBUG_SWAP = false;
 
+const ASSETS_PATH_PREFIXES = new Set(["models", "scares", "sound", "sounds", "textures", "videos"]);
+const URL_FILTER_CACHE = new Map();
+
+function buildNormalUrlFilters(swapDir) {
+	const urls = new Set();
+
+	const add = (u) => urls.add(u);
+	const addHostPath = (host, p) => {
+		add(`*://${host}${p}`);
+		add(`*://${host}${p}?*`);
+	};
+
+	[
+		"assets.krunker.io",
+		"krunker.io",
+		"comp.krunker.io"
+	].forEach(host => {
+		addHostPath(host, "/sound/*");
+		addHostPath(host, "/sounds/*");
+	});
+
+	try {
+		const entries = fs.readdirSync(swapDir, { withFileTypes: true });
+		for (const entry of entries) {
+			const name = String(entry.name || "");
+			const key = name.toLowerCase();
+			if (!name) continue;
+
+			if (entry.isDirectory && entry.isDirectory()) {
+				const isAssets = ASSETS_PATH_PREFIXES.has(key);
+				const hosts = isAssets ? ["assets.krunker.io"] : ["krunker.io", "comp.krunker.io"];
+				for (const host of hosts) addHostPath(host, `/${name}/*`);
+				if (key === "sound") {
+					for (const host of hosts) addHostPath(host, `/sounds/*`);
+				}
+			}
+			else if (entry.isFile && entry.isFile()) {
+				addHostPath("krunker.io", `/${name}`);
+				addHostPath("comp.krunker.io", `/${name}`);
+			}
+		}
+	}
+	catch (_) { }
+
+	return Array.from(urls);
+}
+
+function buildAdvancedUrlFilters(swapDir) {
+	const urls = new Set();
+
+	const add = (u) => urls.add(u);
+	const addHostPath = (host, p) => {
+		add(`*://${host}${p}`);
+		add(`*://${host}${p}?*`);
+	};
+
+	addHostPath("*", "/sound/*");
+	addHostPath("*", "/sounds/*");
+
+	try {
+		const hostEntries = fs.readdirSync(swapDir, { withFileTypes: true });
+		for (const hostDirent of hostEntries) {
+			if (!(hostDirent.isDirectory && hostDirent.isDirectory())) continue;
+			const hostname = String(hostDirent.name || "");
+			if (!hostname) continue;
+
+			addHostPath(hostname, "/sound/*");
+			addHostPath(hostname, "/sounds/*");
+
+			try {
+				const root = path.join(swapDir, hostname);
+				const entries = fs.readdirSync(root, { withFileTypes: true });
+				for (const entry of entries) {
+					const name = String(entry.name || "");
+					if (!name) continue;
+					if (entry.isDirectory && entry.isDirectory()) {
+						addHostPath(hostname, `/${name}/*`);
+						if (name.toLowerCase() === "sound") addHostPath(hostname, `/sounds/*`);
+					}
+					else if (entry.isFile && entry.isFile()) {
+						addHostPath(hostname, `/${name}`);
+					}
+				}
+			}
+			catch (_) {
+				addHostPath(hostname, "/*");
+			}
+		}
+	}
+	catch (_) { }
+
+	return Array.from(urls);
+}
+
 /**
  * Swapping Handler
  *
@@ -148,20 +242,30 @@ class Swapper {
 	 * @memberof Swapper
 	 */
 	init() {
+		const session = this.win && this.win.webContents && this.win.webContents.session;
+		if (!session || !session.webRequest) return;
+		if (session.__waterSwapperRegistered) return;
+		session.__waterSwapperRegistered = true;
+
+		const cacheKey = `${this.swapperMode}|${this.swapDir}`;
+		let cachedUrls = URL_FILTER_CACHE.get(cacheKey);
+		if (!cachedUrls) {
+			cachedUrls = (this.swapperMode === "advanced")
+				? buildAdvancedUrlFilters(this.swapDir)
+				: buildNormalUrlFilters(this.swapDir);
+			URL_FILTER_CACHE.set(cacheKey, cachedUrls);
+		}
+		this.urls = cachedUrls.slice();
+		const redirectCache = new Map();
+
 		switch (this.swapperMode) {
 			case "normal": {
-				this.#recursiveSwapNormal(this.win);
-				// Ensure we intercept all sound requests even if the specific file wasn't pre-scanned
-				this.urls.push(
-					"*://assets.krunker.io/sound/*", "*://assets.krunker.io/sound/*?*",
-					"*://assets.krunker.io/sounds/*", "*://assets.krunker.io/sounds/*?*",
-					"*://krunker.io/sound/*", "*://krunker.io/sound/*?*",
-					"*://krunker.io/sounds/*", "*://krunker.io/sounds/*?*",
-					"*://comp.krunker.io/sound/*", "*://comp.krunker.io/sound/*?*",
-					"*://comp.krunker.io/sounds/*", "*://comp.krunker.io/sounds/*?*"
-				);
-				this.urls.length && this.win.webContents.session.webRequest.onBeforeRequest({ urls: this.urls }, (details, callback) => {
-					let pathname = new URL(details.url).pathname;
+				this.urls.length && session.webRequest.onBeforeRequest({ urls: this.urls }, (details, callback) => {
+					let urlObj = new URL(details.url);
+					let pathname = urlObj.pathname;
+					const cacheKey = `${urlObj.hostname}|${pathname}`;
+					const cachedRedirect = redirectCache.get(cacheKey);
+					if (cachedRedirect) return callback({ redirectURL: cachedRedirect });
 					// Sanitize to relative path for Windows-safe join
 					let relPath = String(pathname).replace(/^[/\\]+/, "");
 					// Normalize sounds -> sound for matching
@@ -176,7 +280,9 @@ class Swapper {
 						DEBUG_SWAP && console.log(`[Swapper:normal] url=${details.url} rel=${relPath} local=${localPath} exists=${hitLocal}`);
 						if (hitLocal) {
 							DEBUG_SWAP && console.log(`[Swapper:normal] HIT ${localPath}`);
-							return callback({ redirectURL: "Water-Swap:///" + encodeURI(localPath.replace(/\\/g, "/")) });
+							const redirectURL = "Water-Swap:///" + encodeURI(localPath.replace(/\\/g, "/"));
+							redirectCache.set(cacheKey, redirectURL);
+							return callback({ redirectURL });
 						}
 						// Handle '/sounds/' by mapping to local '/sound/' folder
 						if (/^\/sounds\//.test(pathname)) {
@@ -186,7 +292,9 @@ class Swapper {
 							DEBUG_SWAP && console.log(`[Swapper:normal] map sounds->sound rel=${mappedRel} local=${mappedLocal} exists=${hitMapped}`);
 							if (hitMapped) {
 								DEBUG_SWAP && console.log(`[Swapper:normal] HIT mapped ${mappedLocal}`);
-								return callback({ redirectURL: "Water-Swap:///" + encodeURI(mappedLocal.replace(/\\/g, "/")) });
+								const redirectURL = "Water-Swap:///" + encodeURI(mappedLocal.replace(/\\/g, "/"));
+								redirectCache.set(cacheKey, redirectURL);
+								return callback({ redirectURL });
 							}
 							// Extension fallback on mapped local
 							let parsedM = path.parse(mappedLocal);
@@ -196,7 +304,11 @@ class Swapper {
 								let altMapped = path.join(parsedM.dir, parsedM.name + altM);
 								const hitAltMapped = fs.existsSync(altMapped);
 								DEBUG_SWAP && console.log(`[Swapper:normal] ALT mapped=${altMapped} exists=${hitAltMapped}`);
-								if (hitAltMapped) return callback({ redirectURL: "Water-Swap:///" + encodeURI(altMapped.replace(/\\/g, "/")) });
+								if (hitAltMapped) {
+									const redirectURL = "Water-Swap:///" + encodeURI(altMapped.replace(/\\/g, "/"));
+									redirectCache.set(cacheKey, redirectURL);
+									return callback({ redirectURL });
+								}
 							}
 						}
 						// Extension fallback for '/sound/' requests
@@ -208,7 +320,11 @@ class Swapper {
 								let altPath = path.join(parsed.dir, parsed.name + alt);
 								const hitAlt = fs.existsSync(altPath);
 								DEBUG_SWAP && console.log(`[Swapper:normal] ALT local=${altPath} exists=${hitAlt}`);
-								if (hitAlt) return callback({ redirectURL: "Water-Swap:///" + encodeURI(altPath.replace(/\\/g, "/")) });
+								if (hitAlt) {
+									const redirectURL = "Water-Swap:///" + encodeURI(altPath.replace(/\\/g, "/"));
+									redirectCache.set(cacheKey, redirectURL);
+									return callback({ redirectURL });
+								}
 							}
 						}
 					}
@@ -219,14 +335,12 @@ class Swapper {
 				break;
 			}
 			case "advanced": {
-				this.#recursiveSwapHostname(this.win);
-				// Ensure we intercept all sound requests in advanced mode too
-				this.urls.push(
-					"*://*/sound/*", "*://*/sound/*?*",
-					"*://*/sounds/*", "*://*/sounds/*?*"
-				);
-				this.urls.length && this.win.webContents.session.webRequest.onBeforeRequest({ urls: this.urls }, (details, callback) => {
-					let { hostname, pathname } = new URL(details.url);
+				this.urls.length && session.webRequest.onBeforeRequest({ urls: this.urls }, (details, callback) => {
+					let urlObj = new URL(details.url);
+					let { hostname, pathname } = urlObj;
+					const cacheKey = `${hostname}|${pathname}`;
+					const cachedRedirect = redirectCache.get(cacheKey);
+					if (cachedRedirect) return callback({ redirectURL: cachedRedirect });
 					// Sanitize to relative path for Windows-safe join
 					let relPath = String(pathname).replace(/^[/\\]+/, "");
 					// Normalize sounds -> sound for matching
@@ -240,7 +354,9 @@ class Swapper {
 						DEBUG_SWAP && console.log(`[Swapper:adv] url=${details.url} host=${hostname} rel=${relPath} local=${localPath} exists=${hitLocal}`);
 						if (hitLocal) {
 							DEBUG_SWAP && console.log(`[Swapper:adv] HIT ${localPath}`);
-							return callback({ redirectURL: "Water-Swap:///" + encodeURI(localPath.replace(/\\/g, "/")) });
+							const redirectURL = "Water-Swap:///" + encodeURI(localPath.replace(/\\/g, "/"));
+							redirectCache.set(cacheKey, redirectURL);
+							return callback({ redirectURL });
 						}
 						// Handle '/sounds/' by mapping to local '/sound/' folder (advanced mode)
 						if (/^\/sounds\//.test(pathname)) {
@@ -248,7 +364,11 @@ class Swapper {
 							let mappedLocal = path.join(this.swapDir, hostname, mappedRel);
 							const hitMapped = fs.existsSync(mappedLocal);
 							DEBUG_SWAP && console.log(`[Swapper:adv] map sounds->sound rel=${mappedRel} local=${mappedLocal} exists=${hitMapped}`);
-							if (hitMapped) return callback({ redirectURL: "Water-Swap:///" + encodeURI(mappedLocal.replace(/\\/g, "/")) });
+							if (hitMapped) {
+								const redirectURL = "Water-Swap:///" + encodeURI(mappedLocal.replace(/\\/g, "/"));
+								redirectCache.set(cacheKey, redirectURL);
+								return callback({ redirectURL });
+							}
 							// Extension fallback on mapped local
 							let parsedM = path.parse(mappedLocal);
 							let extM = (parsedM.ext || "").toLowerCase();
@@ -257,7 +377,11 @@ class Swapper {
 								let altMapped = path.join(parsedM.dir, parsedM.name + altM);
 								const hitAltMapped = fs.existsSync(altMapped);
 								DEBUG_SWAP && console.log(`[Swapper:adv] ALT mapped=${altMapped} exists=${hitAltMapped}`);
-								if (hitAltMapped) return callback({ redirectURL: "Water-Swap:///" + encodeURI(altMapped.replace(/\\/g, "/")) });
+								if (hitAltMapped) {
+									const redirectURL = "Water-Swap:///" + encodeURI(altMapped.replace(/\\/g, "/"));
+									redirectCache.set(cacheKey, redirectURL);
+									return callback({ redirectURL });
+								}
 							}
 						}
 						// Try extension fallback for '/sound/' requests
@@ -269,7 +393,11 @@ class Swapper {
 								let altPath = path.join(parsed.dir, parsed.name + alt);
 								const hitAlt = fs.existsSync(altPath);
 								DEBUG_SWAP && console.log(`[Swapper:adv] ALT local=${altPath} exists=${hitAlt}`);
-								if (hitAlt) return callback({ redirectURL: "Water-Swap:///" + encodeURI(altPath.replace(/\\/g, "/")) });
+								if (hitAlt) {
+									const redirectURL = "Water-Swap:///" + encodeURI(altPath.replace(/\\/g, "/"));
+									redirectCache.set(cacheKey, redirectURL);
+									return callback({ redirectURL });
+								}
 							}
 						}
 						// Final fallback: check global (normal-mode) sound path if host-scoped file not present
@@ -278,7 +406,11 @@ class Swapper {
 							let normalLocal = path.join(this.swapDir, normalRel);
 							const hitNormal = fs.existsSync(normalLocal);
 							DEBUG_SWAP && console.log(`[Swapper:adv] normal fallback rel=${normalRel} local=${normalLocal} exists=${hitNormal}`);
-							if (hitNormal) return callback({ redirectURL: "Water-Swap:///" + encodeURI(normalLocal.replace(/\\/g, "/")) });
+							if (hitNormal) {
+								const redirectURL = "Water-Swap:///" + encodeURI(normalLocal.replace(/\\/g, "/"));
+								redirectCache.set(cacheKey, redirectURL);
+								return callback({ redirectURL });
+							}
 							let parsedN = path.parse(normalLocal);
 							let extN = (parsedN.ext || "").toLowerCase();
 							let altN = extN === ".ogg" ? ".mp3" : (extN === ".mp3" ? ".ogg" : "");
@@ -286,7 +418,11 @@ class Swapper {
 								let altNormal = path.join(parsedN.dir, parsedN.name + altN);
 								const hitAltNormal = fs.existsSync(altNormal);
 								DEBUG_SWAP && console.log(`[Swapper:adv] ALT normal=${altNormal} exists=${hitAltNormal}`);
-								if (hitAltNormal) return callback({ redirectURL: "Water-Swap:///" + encodeURI(altNormal.replace(/\\/g, "/")) });
+								if (hitAltNormal) {
+									const redirectURL = "Water-Swap:///" + encodeURI(altNormal.replace(/\\/g, "/"));
+									redirectCache.set(cacheKey, redirectURL);
+									return callback({ redirectURL });
+								}
 							}
 						}
 					}

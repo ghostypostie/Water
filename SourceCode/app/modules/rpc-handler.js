@@ -1,6 +1,7 @@
 "use strict";
 
 let DiscordRPC = require("discord-rpc");
+const logger = require("../utils/logger");
 
 /**
  * Handles RPC start, stop and changes
@@ -39,7 +40,15 @@ class RPCHandler {
 	 * @memberof RPCHandler
 	 */
 	async update(activity) {
-		await this.rpc.setActivity(activity).catch(console.error);
+		if (!this.isEnabled) return;
+		console.log('[Water RPC] Updating activity:', activity);
+		await this.rpc.setActivity(activity).catch(err => {
+			// Suppress "connection closed" errors during shutdown
+			if (err && err.message && err.message.includes('connection closed')) {
+				return; // Silently ignore
+			}
+			console.error('[Water RPC] Update failed:', err);
+		});
 	}
 
 	/**
@@ -49,10 +58,16 @@ class RPCHandler {
 	 * @memberof RPCHandler
 	 */
 	async start() {
-		if (!this.isEnabled) return;
-		this.rpc.on("ready", () => console.log("Discord RPC ready"));
+		if (!this.isEnabled) {
+			console.log('[Water RPC] Disabled in settings');
+			return;
+		}
+		console.log('[Water RPC] Starting with client ID:', this.rpcClientId);
+		this.rpc.on("ready", () => {
+			console.log('[Water RPC] Connected and ready');
+		});
 		await this.rpc.login({ clientId: this.rpcClientId }).catch(error => {
-			console.error(error);
+			console.error('[Water RPC] Login failed:', error);
 			this.isEnabled = false;
 		});
 	}
@@ -65,8 +80,12 @@ class RPCHandler {
 	 */
 	async end() {
 		if (!this.isEnabled) return null;
-		await this.rpc.clearActivity().catch(e => console.log(e));
-		return await this.rpc.destroy().catch(e => console.log(e));
+		try {
+			await this.rpc.clearActivity().catch(() => {});
+			await this.rpc.destroy().catch(() => {});
+		} catch (e) {
+			// Silently ignore errors during shutdown
+		}
 	}
 }
 

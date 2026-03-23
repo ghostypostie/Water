@@ -14,7 +14,7 @@ class AccountManager {
 		this.button.classList.add("button", "buttonB", "bigShadowT");
 		this.button.setAttribute("onmouseenter", "playTick()");
 		this.button.style.cssText =
-			"display:block;width:450px;text-align:center;padding:15px;font-size:25px;pointer-events:all;padding-bottom:22px;margin-left:300px;margin-top:0px";
+			"display:block;width:450px;text-align:center;padding:15px;font-size:27px;pointer-events:all;padding-bottom:22px;margin-left:300px;margin-top:0px";
 
 		this.container = document.createElement("div");
 		this.accounts = JSON.parse(localStorage.getItem("accounts") || "[]");
@@ -293,10 +293,40 @@ class AccountManager {
 		document.head.appendChild(style);
 
 		// Inject button after customize button
-		const customizeBtn = document.getElementById("customizeButton");
-		if (customizeBtn) {
-			customizeBtn.parentNode.insertBefore(this.button, customizeBtn.nextSibling);
-			this.button.addEventListener("click", () => this.createMenu());
+		const placeBtn = () => {
+			const newCustomizeBtn = document.getElementById("newCustomizeButton");
+			const customizeBtns = document.querySelectorAll("#customizeButton");
+			const anchorBtn = newCustomizeBtn || (customizeBtns.length ? customizeBtns[customizeBtns.length - 1] : null);
+			if (!anchorBtn || !anchorBtn.parentNode) return false;
+			if (anchorBtn.nextSibling !== this.button) {
+				anchorBtn.parentNode.insertBefore(this.button, anchorBtn.nextSibling);
+			}
+			if (!this._waterAccBtnClickBound) {
+				this.button.addEventListener("click", () => this.createMenu());
+				this._waterAccBtnClickBound = true;
+			}
+			return true;
+		};
+
+		placeBtn();
+		if (!this._waterAccBtnObserver) {
+			this._waterAccBtnObserver = new MutationObserver(() => {
+				const placed = placeBtn();
+				if (!placed) return;
+				const hasNewCustomize = Boolean(document.getElementById("newCustomizeButton"));
+				const customizeCount = document.querySelectorAll("#customizeButton").length;
+				if (hasNewCustomize || customizeCount >= 2) {
+					try { this._waterAccBtnObserver.disconnect(); } catch (_) { }
+					this._waterAccBtnObserver = null;
+				}
+			});
+			try {
+				this._waterAccBtnObserver.observe(document.documentElement, { childList: true, subtree: true });
+			} catch (_) { }
+			setTimeout(() => {
+				try { if (this._waterAccBtnObserver) this._waterAccBtnObserver.disconnect(); } catch (_) { }
+				this._waterAccBtnObserver = null;
+			}, 15000);
 		}
 	}
 }

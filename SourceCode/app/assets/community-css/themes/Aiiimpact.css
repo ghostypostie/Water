@@ -1,8 +1,8 @@
 :root {
     --div-grey: transparent;
     --div-black: rgb(0 0 0 / 30%);
-    --ign: "XXL";
-    --clan: " [888]";
+    --ign: "Water";
+    --clan: " (●'◡'●)";
     --loadbg: url('https://i.postimg.cc/KvGkXwwp/966850b41da7623591e2b1f55099f73f.jpg');
     --endbg: url('https://i.postimg.cc/Zqd0FSBD/b12be12298d91c2483b7193560cd69de.jpg');
     --pfp: url('https://i.postimg.cc/9QxyNCfC/secondpfp.jpg');
@@ -504,7 +504,8 @@ div#ammoVal::after {
 #bottomLeftPlayer,
 .greyInner,
 .greyInlineInner,
-.greyInlineInnerMid {
+.greyInlineInnerMid,
+#mLevelCont {
     background-color: transparent !important
 }
 
