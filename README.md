@@ -25,7 +25,7 @@ Display **Twitch stream chat** directly in Krunker's in-game chat:
 
 ### Water Customizations
 Custom theme and UI toggle system:
-- **8 UI toggles**: Hide ADs, Terms Info, Signup Alerts, Hide Buttons in menuItemContainer, etc.
+- **15 UI toggles**: Hide ADs, Terms Info, Signup Alerts, Hide Buttons in menuItemContainer, etc.
 - **Community CSS themes** support
 - **Scripts section** for custom functionality
 
@@ -45,6 +45,9 @@ Custom theme and UI toggle system:
 - **Display Mode** options (Windowed/Maximized/Fullscreen/Borderless)
 
 ## Screenshots
+
+### Rank Badges on Old Scoreboard
+![Rank Badges on Old Scoreboard](screenshots/rank-badges.png)
 
 ### Quick Play Feature
 ![Quick Play in action](screenshots/quickplay.png)
