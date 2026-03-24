@@ -49,6 +49,9 @@ Custom theme and UI toggle system:
 ### Rank Badges on Old Scoreboard
 ![Rank Badges on Old Scoreboard](screenshots/rank-badges.png)
 
+### One-Click Mod Downloader
+![Download Mods](screenshots/mods.png)
+
 ### Quick Play Feature
 ![Quick Play in action](screenshots/quickplay.png)
 
