@@ -22,13 +22,13 @@ jobs:
         run: npm install
 
       - name: Build Windows
-        run: npm run dist
+        run: npx electron-builder --win --publish never
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: Water-Windows
-          path: dist/Water.exe
+          path: dist/*.exe
 
   build-mac:
     runs-on: macos-latest
@@ -43,7 +43,7 @@ jobs:
         run: npm install
 
       - name: Build macOS
-        run: npx electron-builder --mac
+        run: npx electron-builder --mac --publish never
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -61,11 +61,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: Water-Windows
+          path: artifacts/windows
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
           name: Water-macOS
+          path: artifacts/mac
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -74,7 +76,7 @@ jobs:
           name: "1.0.6"
           body: ${{ github.event.inputs.release_notes }}
           files: |
-            Water.exe
-            *.dmg
+            artifacts/windows/*.exe
+            artifacts/mac/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

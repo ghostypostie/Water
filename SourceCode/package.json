@@ -45,8 +45,6 @@
     "electron-log": "^4.4.8",
     "electron-store": "^6.0.1",
     "electron-updater": "4.3.9",
-    "ffmpeg-static": "^4.4.1",
-    "sharp": "^0.34.5",
     "v8-compile-cache": "^2.3.0",
     "ws": "^7.5.9",
     "yargs": "^17.1.1"
