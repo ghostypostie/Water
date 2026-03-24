@@ -34,7 +34,7 @@ jobs:
           path: SourceCode/dist/*.exe
 
   build-mac:
-    runs-on: macos-latest
+    runs-on: macos-13
     defaults:
       run:
         working-directory: SourceCode
