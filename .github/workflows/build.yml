@@ -11,6 +11,9 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: SourceCode
     steps:
       - uses: actions/checkout@v4
 
@@ -28,10 +31,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Water-Windows
-          path: dist/*.exe
+          path: SourceCode/dist/*.exe
 
   build-mac:
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: SourceCode
     steps:
       - uses: actions/checkout@v4
 
@@ -49,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Water-macOS
-          path: dist/*.dmg
+          path: SourceCode/dist/*.dmg
 
   release:
     needs: [build-windows, build-mac]
