@@ -1,4 +1,5 @@
 const CSSLoader = require('./css-loader');
+const ModDownloader = require('./mod-downloader');
 const path = require('path');
 const fs = require('fs');
 
@@ -182,10 +183,10 @@ class CommunityCSSAddon {
                         display: block;
                     }
                     .waterWindow-left {
-                        left: calc(50% - 820px);
+                        left: 0;
                     }
                     .waterWindow-right {
-                        right: calc(50% - 820px);
+                        right: 0;
                     }
                     .waterWindowHeader {
                         background-color: rgba(0, 0, 0, 0.2);
@@ -406,6 +407,21 @@ class CommunityCSSAddon {
                 </div>
             `;
             document.body.appendChild(customizationsWindow);
+
+            // Position windows relative to viewport center (robust across all resolutions/scales)
+            const positionWindows = () => {
+                const gap = 20;
+                const tw = themesWindow.offsetWidth || 800;
+                const cw = customizationsWindow.offsetWidth || 800;
+                const totalW = tw + cw + gap;
+                const startX = Math.max(10, (window.innerWidth - totalW) / 2);
+                themesWindow.style.left = startX + 'px';
+                themesWindow.style.right = '';
+                customizationsWindow.style.left = (startX + tw + gap) + 'px';
+                customizationsWindow.style.right = '';
+            };
+            // Run after layout
+            requestAnimationFrame(() => { requestAnimationFrame(positionWindows); });
 
             this.renderThemes();
             this.renderScripts();
@@ -1023,6 +1039,11 @@ class CommunityCSSAddon {
         } catch (e) {
             console.error('[CommunityCSSAddon] Apply UI toggles error:', e);
         }
+    }
+
+    initModDownloader() {
+        const downloader = new ModDownloader();
+        downloader.init();
     }
 }
 

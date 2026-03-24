@@ -103,8 +103,7 @@ class BrowserLoader {
 				backgroundThrottling: false,
 				offscreen: false,
 				spellcheck: false,
-				v8CacheOptions: "bypassHeatCheck",
-				disableHtmlFullscreenWindowResize: true
+				v8CacheOptions: "bypassHeatCheck"
 			}
 		};
 
@@ -276,58 +275,78 @@ class BrowserLoader {
 		contents.on("new-window", (event, url, frameName, disposition, options) => {
 			event.preventDefault();
 			const locType = UrlUtils.locationType(url);
-			
+
 			console.log('[Water] new-window event:', url, 'type:', locType);
-			
-			// ALWAYS navigate krunker.io URLs in the same window - NEVER open externally
-			if (locType === "game" || locType === "social" || locType === "viewer" || locType === "editor") {
-				console.log('[Water] Intercepted krunker.io navigation, loading in same window:', url);
+
+			// Game root — load in same window
+			if (locType === "game") {
 				contents.loadURL(url);
 				return;
 			}
-			
-			// Check if it's krunker.io domain even if path is unknown
+
+			// Krunker sub-pages — open in a new Water window so the game stays intact
+			if (locType === "social" || locType === "viewer" || locType === "editor") {
+				console.log('[Water] Opening krunker sub-page in new window:', url);
+				this.initWindow(url, config);
+				return;
+			}
+
+			// Any other krunker.io path (profile pages, etc.) — new window
 			try {
 				const urlObj = new URL(url);
 				if (/^(www|comp\.)?krunker\.io$/.test(urlObj.hostname)) {
-					console.log('[Water] Intercepted krunker.io URL (unknown path), loading in same window:', url);
-					contents.loadURL(url);
+					console.log('[Water] Opening krunker.io URL in new window:', url);
+					this.initWindow(url, config);
 					return;
 				}
 			} catch (_) {}
-			
-			// Open truly external links in browser
+
+			// Truly external — open in default browser
 			if (locType === "external") {
 				console.log('[Water] Opening external URL in browser:', url);
 				shell.openExternal(url);
 				return;
 			}
-			
-			// Default: load in same window if not external
+
+			// Fallback
 			if (locType !== "unknown") {
-				if (frameName === "_self") contents.loadURL(url);
-				else this.initWindow(url, config, /** @type {object} */(options).webContents);
+				this.initWindow(url, config);
 			}
 		});
 
 		contents.on("will-navigate", (event, url) => {
 			const locType = UrlUtils.locationType(url);
-			
-			// ALWAYS allow navigation to krunker.io pages in the same window
-			if (locType === "game" || locType === "social" || locType === "viewer" || locType === "editor") {
-				console.log('[Water] Allowing krunker.io navigation in same window:', url);
-				// Don't prevent - allow navigation in same window
+
+			// Game root — allow navigation in same window (Return to Krunker, Quick Match, etc.)
+			if (locType === "game") {
 				return;
 			}
-			
-			// Prevent and handle non-krunker URLs
+
+			// Krunker sub-pages (social, viewer, editor, profile links) — block same-window nav,
+			// open in a new window so the game session is preserved
+			if (locType === "social" || locType === "viewer" || locType === "editor") {
+				event.preventDefault();
+				console.log('[Water] Redirecting krunker sub-page to new window:', url);
+				this.initWindow(url, config);
+				return;
+			}
+
+			// Any other krunker.io path (e.g. /profile?user=...) — new window
+			try {
+				const urlObj = new URL(url);
+				if (/^(www|comp\.)?krunker\.io$/.test(urlObj.hostname)) {
+					event.preventDefault();
+					console.log('[Water] Redirecting krunker.io URL to new window:', url);
+					this.initWindow(url, config);
+					return;
+				}
+			} catch (_) {}
+
+			// External — block and open in browser
 			event.preventDefault();
-			
 			if (locType === "external") {
 				console.log('[Water] Blocking external navigation, opening in browser:', url);
 				shell.openExternal(url);
-			} else if (locType !== "unknown") {
-				contents.loadURL(url);
 			}
 		});
 
@@ -342,7 +361,6 @@ class BrowserLoader {
 
 		shortcuts.register(win, "F5", () => contents.reload());
 		shortcuts.register(win, "Shift+F5", () => contents.reloadIgnoringCache());
-		shortcuts.register(win, "F11", () => win.setFullScreen(!win.isFullScreen()));
 		shortcuts.register(win, "CommandOrControl+L", () => clipboard.writeText(contents.getURL()));
 		shortcuts.register(win, "CommandOrControl+N", () => this.initWindow("https://krunker.io/", config));
 		shortcuts.register(win, "CommandOrControl+Shift+N", () => this.initWindow(contents.getURL(), config));

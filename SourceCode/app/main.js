@@ -118,8 +118,9 @@ let init = function () {
 			console.error('[Water] Failed to select loading background:', e);
 		}
 
-		const { ipcMain, Notification } = require("electron");
+		const { ipcMain, Notification, shell } = require("electron");
 		ipcMain.handle('get-loading-bg', () => global.loadingBg || null);
+		ipcMain.handle('shell-show-item', (_, filePath) => { try { shell.showItemInFolder(filePath); } catch (_) {} });
 
 		// Helper: show a ranked match notification
 		const showRankedNotification = (gameWindow) => {

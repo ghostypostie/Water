@@ -272,6 +272,9 @@ UtilManager.instance.clientUtils.events.on("game-load", () => {
 
         cssAddon.init().catch(e => console.error('[Water] Community CSS init error:', e));
 
+        // Start mod downloader — injects DL buttons into Krunker's mods window
+        try { cssAddon.initModDownloader(); } catch (_) {}
+
         const tryInject = () => {
             const waterInjected = cssAddon.injectSidebarItem();
             const modsInjected = cssAddon.injectModsSidebarItem();
@@ -367,6 +370,26 @@ UtilManager.instance.clientUtils.events.on("game-load", () => {
         return html;
     };
 });
+
+// ==========================================
+// F11 FULLSCREEN TOGGLE
+// Renderer sends IPC to main — works through pointer lock and all window states
+// ==========================================
+try {
+    const { ipcRenderer } = require('electron');
+    // Use window capture + also hook before DOMContentLoaded so it's first in the chain
+    const _f11Handler = (e) => {
+        if (e.key !== 'F11' && e.keyCode !== 122) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        ipcRenderer.send('f11-toggle');
+        console.log('[WaterClient] F11 sent to main');
+    };
+    window.addEventListener('keydown', _f11Handler, true);
+    document.addEventListener('keydown', _f11Handler, true);
+} catch (e) {
+    console.error('[WaterClient] F11 handler error:', e);
+}
 
 // ==========================================
 // RAW MOUSE INPUT
