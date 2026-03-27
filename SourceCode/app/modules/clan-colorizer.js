@@ -97,4 +97,10 @@ function cleanup() {
 	isInitialized = false;
 }
 
+// Auto-cleanup on window unload
+if (typeof window !== 'undefined') {
+	window.addEventListener('beforeunload', cleanup);
+	window.addEventListener('unload', cleanup);
+}
+
 module.exports = { init, cleanup };

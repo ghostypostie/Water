@@ -188,7 +188,15 @@ class TwitchChatIntegration {
             this.ws = null;
             this.connected = false;
             this.channel = null;
+            this.recentMessages = []; // Clear message history
         }
+    }
+
+    // Cleanup method to be called on window unload
+    cleanup() {
+        this.disconnect();
+        this.reconnectAttempts = this.maxReconnectAttempts; // Prevent reconnection
+        console.log('[Water] [Twitch] Cleanup completed');
     }
 }
 
@@ -204,3 +212,15 @@ if (twitchChannel && twitchChannel.trim() !== '') {
 
 // Export for use in other modules
 window.waterTwitchChat = twitchChat;
+
+// Auto-cleanup on window unload
+window.addEventListener('beforeunload', () => {
+    if (window.waterTwitchChat) {
+        window.waterTwitchChat.cleanup();
+    }
+});
+window.addEventListener('unload', () => {
+    if (window.waterTwitchChat) {
+        window.waterTwitchChat.cleanup();
+    }
+});

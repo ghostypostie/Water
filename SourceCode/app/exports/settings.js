@@ -371,6 +371,19 @@ module.exports = {
 			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
 		}
 	},
+	customLoadingScreen: {
+		name: "Custom Loading Screen",
+		id: "customLoadingScreen",
+		cat: "Interface",
+		type: "text",
+		val: "",
+		placeholder: "https://example.com/image.gif",
+		needsRestart: true,
+		html() {
+			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
+		},
+		info: "Direct image/GIF URL to use as loading screen. Leave empty for default Water loader."
+	},
 	fullscreen: {
 		name: "Display Mode",
 		id: "fullscreen",
@@ -436,33 +449,6 @@ module.exports = {
 			} catch (e) {
 				console.error('[Water] Failed to change display mode:', e);
 			}
-		}
-	},
-	discordRPC: {
-		name: "Discord Rich Presence",
-		id: "discordRPC",
-		cat: "Discord",
-		type: "checkbox",
-		val: true,
-		needsRestart: true,
-		html() {
-			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
-		}
-	},
-	waterBotHelper: {
-		name: "Help Tron Bot to carry information (Under Development)",
-		id: "tronBotHelper",
-		cat: "Discord",
-		type: "checkbox",
-		val: false,
-		disabled: true,
-		hide: true, // Hidden from settings UI
-		html() {
-			return UtilManager.instance.clientUtils.genCSettingsHTML(this);
-		},
-		info: "Share game stats and access token with Tron Discord Bot (localhost only)",
-		set: (val) => {
-			// Disabled - no longer functional
 		}
 	},
 	autoUpdate: {

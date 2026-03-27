@@ -945,6 +945,7 @@ class CommunityCSSAddon {
 
     getUIToggles() {
         return [
+            { id: 'hideLoadingScreen', name: 'Hide Water Loader', css: '', defaultOn: false, requiresRestart: true },
             { id: 'hideAds', name: 'Hide ADs', css: '#mainLogo, #topRightAdHolder, #aHolder, #endAContainer, #bubbleContainer, #homeStoreAd, #newUserGuide, #doubleRaidDropsAd, #battlepassAd, #updateAd, #mainLogoFace, #seasonLabel, #doubleXPHolder, .webpush-container, #krDiscountAd, #surveyAd {display: none !important;}', defaultOn: false },
             { id: 'hideTermsInfo', name: 'Hide Terms Info', css: '#termsInfo {display: none;}', defaultOn: false },
             { id: 'hideSignupAlerts', name: 'Hide Signup Alerts', css: '#signupRewardsButton, .signup-rewards-container, .guest-earned-collect, #notificationCenter {display: none !important;}', defaultOn: true },
@@ -975,7 +976,7 @@ class CommunityCSSAddon {
 
                 return `
                     <div class="settNameSmall script-item">
-                        <span class="script-name">${toggle.name}</span>
+                        <span class="script-name">${toggle.name}${toggle.requiresRestart ? ' <span style="color: #ff6464;">*</span>' : ''}</span>
                         <label class="switch" style="margin-left: 10px;">
                             <input type="checkbox" id="water-ui-${toggle.id}" 
                                    ${isOn ? 'checked' : ''} 
@@ -989,6 +990,37 @@ class CommunityCSSAddon {
             window.toggleWaterUI = (toggleId, enabled) => {
                 const toggle = this.getUIToggles().find(t => t.id === toggleId);
                 if (!toggle) return;
+
+                // Handle loading screen toggle specially - save to electron-store
+                if (toggleId === 'hideLoadingScreen') {
+                    const Store = require('electron-store');
+                    const config = new Store();
+                    config.set('hideLoadingScreen', enabled);
+                    localStorage.setItem(`water-ui-${toggleId}`, enabled.toString());
+                    console.log(`[Water] hideLoadingScreen saved to electron-store:`, enabled);
+                    console.log(`[Water] Loading screen will be ${enabled ? 'hidden' : 'shown'} on next launch`);
+                    
+                    // Verify it was saved
+                    setTimeout(() => {
+                        const saved = config.get('hideLoadingScreen');
+                        console.log(`[Water] Verified hideLoadingScreen in store:`, saved);
+                    }, 100);
+                    
+                    // Show restart notice
+                    const checkbox = document.getElementById(`water-ui-${toggleId}`);
+                    if (checkbox && checkbox.parentElement && checkbox.parentElement.parentElement) {
+                        const item = checkbox.parentElement.parentElement;
+                        let notice = item.querySelector('.restart-notice');
+                        if (!notice) {
+                            notice = document.createElement('div');
+                            notice.className = 'restart-notice';
+                            notice.style.cssText = 'font-size: 11px; color: #ff9800; margin-top: 5px;';
+                            notice.textContent = 'Restart required to apply';
+                            item.appendChild(notice);
+                        }
+                    }
+                    return;
+                }
 
                 // Handle Mods button toggle specially
                 if (toggle.isModsButton) {

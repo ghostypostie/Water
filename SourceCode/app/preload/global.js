@@ -13,8 +13,14 @@ let UrlUtils = require("../utils/url-utils");
 let UserscriptInitiator = require("../modules/userscript-manager/userscript-initiator");
 let UtilManager = require("../modules/util-manager");
 
-// Fix electron-store for Electron 10 with minimal webPreferences
-const config = new Store({ cwd: remote.app.getPath('userData') });
+// Fix electron-store for Electron 10 — remote may not be available
+let config;
+try {
+	config = new Store({ cwd: remote && remote.app ? remote.app.getPath('userData') : undefined });
+} catch (e) {
+	console.warn('[Water] Failed to init Store with remote, using default path:', e.message);
+	config = new Store();
+}
 
 Object.assign(console, log.functions);
 localStorage.setItem("logs", "true");
@@ -86,74 +92,6 @@ switch (windowType) {
 	default: () => { };
 }
 
-let rpcIntervalId;
-
-function setFocusEvent() {
-	window.addEventListener("focus", () => {
-		let rpcActivity = {
-			largeImageKey: "logo",
-			largeImageText: "Water Client"
-		};
-
-		function sendRPCGamePresence() {
-			try {
-				let gameActivity = /** @type {object} */ (window).getGameActivity();
-
-				Object.assign(rpcActivity, {
-					state: gameActivity.map,
-					details: gameActivity.mode
-				});
-
-				if (gameActivity.time) rpcActivity.endTimestamp = Date.now() + gameActivity.time * 1000;
-				ipcRenderer.invoke("rpc-activity", rpcActivity);
-			}
-			catch (error) {
-				ipcRenderer.invoke("rpc-activity", Object.assign(rpcActivity, {
-					state: "Playing",
-					startTimestamp: Math.floor(Date.now() / 1000)
-				}));
-			}
-		}
-
-		let isIntervalSet = false;
-		switch (windowType) {
-			case "game": {
-				sendRPCGamePresence();
-				if (rpcIntervalId) clearInterval(rpcIntervalId);
-				rpcIntervalId = setInterval(sendRPCGamePresence, 5e3);
-				isIntervalSet = true;
-				break;
-			}
-			case "docs":
-				rpcActivity.state = "Reading Docs";
-				break;
-			case "social":
-				rpcActivity.state = "In the Hub";
-				break;
-			case "viewer":
-				rpcActivity.state = "In the Texture Viewer";
-				break;
-			case "editor":
-				rpcActivity.state = "In the Editor";
-				break;
-			default:
-				rpcActivity.state = "Unknown";
-				break;
-		}
-
-		if (!isIntervalSet) {
-			ipcRenderer.invoke("rpc-activity", Object.assign(rpcActivity, {
-				startTimestamp: Math.floor(performance.timeOrigin / 1000)
-			}));
-		}
-	}, { once: true });
-}
-
-ipcRenderer.on("rpc-stop", () => {
-	setFocusEvent();
-	if (rpcIntervalId) clearInterval(rpcIntervalId);
-});
-
 ipcRenderer.invoke("get-app-info")
 	.then(info => {
 		const initalize = async () => {
@@ -167,14 +105,3 @@ ipcRenderer.invoke("get-app-info")
 			? UtilManager.instance.clientUtils.events.on("game-load", () => initalize())
 			: initalize();
 	});
-
-setFocusEvent();
-
-window.addEventListener("unload", () => {
-	ipcRenderer.invoke("rpc-activity", {
-		state: "Idle",
-		startTimestamp: Math.floor(Date.now() / 1000),
-		largeImageKey: "logo",
-		largeImageText: "Water Client"
-	});
-});

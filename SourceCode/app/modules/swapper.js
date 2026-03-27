@@ -257,6 +257,16 @@ class Swapper {
 		}
 		this.urls = cachedUrls.slice();
 		const redirectCache = new Map();
+		const MAX_REDIRECT_CACHE_SIZE = 1000;
+
+		// Helper to add to cache with size limit
+		const addToCache = (key, value) => {
+			if (redirectCache.size >= MAX_REDIRECT_CACHE_SIZE) {
+				const firstKey = redirectCache.keys().next().value;
+				redirectCache.delete(firstKey);
+			}
+			redirectCache.set(key, value);
+		};
 
 		switch (this.swapperMode) {
 			case "normal": {
@@ -281,7 +291,7 @@ class Swapper {
 						if (hitLocal) {
 							DEBUG_SWAP && console.log(`[Swapper:normal] HIT ${localPath}`);
 							const redirectURL = "Water-Swap:///" + encodeURI(localPath.replace(/\\/g, "/"));
-							redirectCache.set(cacheKey, redirectURL);
+							addToCache(cacheKey, redirectURL);
 							return callback({ redirectURL });
 						}
 						// Handle '/sounds/' by mapping to local '/sound/' folder
@@ -293,7 +303,7 @@ class Swapper {
 							if (hitMapped) {
 								DEBUG_SWAP && console.log(`[Swapper:normal] HIT mapped ${mappedLocal}`);
 								const redirectURL = "Water-Swap:///" + encodeURI(mappedLocal.replace(/\\/g, "/"));
-								redirectCache.set(cacheKey, redirectURL);
+								addToCache(cacheKey, redirectURL);
 								return callback({ redirectURL });
 							}
 							// Extension fallback on mapped local
@@ -306,7 +316,7 @@ class Swapper {
 								DEBUG_SWAP && console.log(`[Swapper:normal] ALT mapped=${altMapped} exists=${hitAltMapped}`);
 								if (hitAltMapped) {
 									const redirectURL = "Water-Swap:///" + encodeURI(altMapped.replace(/\\/g, "/"));
-									redirectCache.set(cacheKey, redirectURL);
+									addToCache(cacheKey, redirectURL);
 									return callback({ redirectURL });
 								}
 							}
@@ -322,7 +332,7 @@ class Swapper {
 								DEBUG_SWAP && console.log(`[Swapper:normal] ALT local=${altPath} exists=${hitAlt}`);
 								if (hitAlt) {
 									const redirectURL = "Water-Swap:///" + encodeURI(altPath.replace(/\\/g, "/"));
-									redirectCache.set(cacheKey, redirectURL);
+									addToCache(cacheKey, redirectURL);
 									return callback({ redirectURL });
 								}
 							}
@@ -355,7 +365,7 @@ class Swapper {
 						if (hitLocal) {
 							DEBUG_SWAP && console.log(`[Swapper:adv] HIT ${localPath}`);
 							const redirectURL = "Water-Swap:///" + encodeURI(localPath.replace(/\\/g, "/"));
-							redirectCache.set(cacheKey, redirectURL);
+							addToCache(cacheKey, redirectURL);
 							return callback({ redirectURL });
 						}
 						// Handle '/sounds/' by mapping to local '/sound/' folder (advanced mode)
@@ -366,7 +376,7 @@ class Swapper {
 							DEBUG_SWAP && console.log(`[Swapper:adv] map sounds->sound rel=${mappedRel} local=${mappedLocal} exists=${hitMapped}`);
 							if (hitMapped) {
 								const redirectURL = "Water-Swap:///" + encodeURI(mappedLocal.replace(/\\/g, "/"));
-								redirectCache.set(cacheKey, redirectURL);
+								addToCache(cacheKey, redirectURL);
 								return callback({ redirectURL });
 							}
 							// Extension fallback on mapped local
@@ -379,7 +389,7 @@ class Swapper {
 								DEBUG_SWAP && console.log(`[Swapper:adv] ALT mapped=${altMapped} exists=${hitAltMapped}`);
 								if (hitAltMapped) {
 									const redirectURL = "Water-Swap:///" + encodeURI(altMapped.replace(/\\/g, "/"));
-									redirectCache.set(cacheKey, redirectURL);
+									addToCache(cacheKey, redirectURL);
 									return callback({ redirectURL });
 								}
 							}
@@ -395,7 +405,7 @@ class Swapper {
 								DEBUG_SWAP && console.log(`[Swapper:adv] ALT local=${altPath} exists=${hitAlt}`);
 								if (hitAlt) {
 									const redirectURL = "Water-Swap:///" + encodeURI(altPath.replace(/\\/g, "/"));
-									redirectCache.set(cacheKey, redirectURL);
+									addToCache(cacheKey, redirectURL);
 									return callback({ redirectURL });
 								}
 							}
@@ -408,7 +418,7 @@ class Swapper {
 							DEBUG_SWAP && console.log(`[Swapper:adv] normal fallback rel=${normalRel} local=${normalLocal} exists=${hitNormal}`);
 							if (hitNormal) {
 								const redirectURL = "Water-Swap:///" + encodeURI(normalLocal.replace(/\\/g, "/"));
-								redirectCache.set(cacheKey, redirectURL);
+								addToCache(cacheKey, redirectURL);
 								return callback({ redirectURL });
 							}
 							let parsedN = path.parse(normalLocal);
@@ -420,7 +430,7 @@ class Swapper {
 								DEBUG_SWAP && console.log(`[Swapper:adv] ALT normal=${altNormal} exists=${hitAltNormal}`);
 								if (hitAltNormal) {
 									const redirectURL = "Water-Swap:///" + encodeURI(altNormal.replace(/\\/g, "/"));
-									redirectCache.set(cacheKey, redirectURL);
+									addToCache(cacheKey, redirectURL);
 									return callback({ redirectURL });
 								}
 							}

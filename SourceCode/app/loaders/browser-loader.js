@@ -410,7 +410,7 @@ class BrowserLoader {
 		});
 		let contents = win.webContents;
 
-		// Ensure external links (e.g., Discord invites) open in the default browser
+		// Ensure external links open in the default browser
 		try {
 			contents.on("new-window", (event, url) => {
 				event.preventDefault();

@@ -4,7 +4,6 @@ let { BrowserWindow, ipcMain, app, dialog, globalShortcut } = require("electron"
 let path = require("path");
 
 let BrowserLoader = require("./browser-loader");
-let RPCHandler = require("../modules/rpc-handler");
 
 class IpcLoader {
     /**
@@ -130,38 +129,6 @@ class IpcLoader {
         } catch (e) {
             console.error('[Water] F11 error:', e);
         }
-    }
-
-    /**
-     * Initializes Discord RPC
-     * @param {import("electron-store")} config
-     */
-    static initRpc(config) {
-        let rpcHandler = new RPCHandler(
-            "1310915417312722984",
-            /** @type {boolean} */ (config.get("discordRPC", true))
-        );
-
-        let lastSender = null;
-        ipcMain.handle("rpc-activity", async (event, activity) => {
-            if (rpcHandler.rpcEnabled()) {
-                if (lastSender !== event.sender) {
-                    if (lastSender) lastSender.send("rpc-stop");
-                    lastSender = event.sender;
-                    lastSender.on("destroyed", () => (lastSender = null));
-                }
-                await rpcHandler.update(activity);
-            }
-        });
-
-        app.once("ready", async () => await rpcHandler.start());
-
-        app.on("before-quit", async () => {
-            try { await rpcHandler.end(); } catch (_) {}
-        });
-        app.on("quit", async () => {
-            try { await rpcHandler.end(); } catch (_) {}
-        });
     }
 }
 

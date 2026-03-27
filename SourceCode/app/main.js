@@ -4,7 +4,7 @@ require("v8-compile-cache");
 
 let path = require("path");
 let fs = require("fs");
-let { app, protocol } = require("electron");
+let { app, protocol, powerSaveBlocker } = require("electron");
 let Store = require("electron-store");
 let log = require("electron-log");
 const { autoUpdater } = require("electron-updater");
@@ -35,6 +35,15 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
 	console.error('[Water] Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
+// Prevent system sleep/throttling — keeps game running at full speed even when unfocused
+let powerSaveBlockerId = null;
+try {
+	powerSaveBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+	console.log('[Water] Power save blocker started:', powerSaveBlockerId);
+} catch (e) {
+	console.error('[Water] Failed to start power save blocker:', e);
+}
 
 /** @type {string} */
 let userscriptsDirConfig = (config.get("userscriptsPath", ""));
@@ -79,7 +88,6 @@ let init = function () {
 
 	BrowserLoader.load(Boolean(argv.debug), config);
 	IpcLoader.load(config);
-	IpcLoader.initRpc(config);
 
 	app.once("ready", async () => {
 		// Auto-updater (production only)

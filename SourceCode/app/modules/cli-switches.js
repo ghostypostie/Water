@@ -70,12 +70,14 @@ let cliSwitchHandler = function(app, config) {
 	app.commandLine.appendSwitch("max-gum-fps", "9999");
 	// Single disable-features call (multiple calls only keep the last one)
 	app.commandLine.appendSwitch("disable-features",
-		"CalculateNativeWinOcclusion,BackgroundTimerThrottling,HardwareMediaKeyHandling,MediaSessionService");
+		"CalculateNativeWinOcclusion,BackgroundTimerThrottling,HardwareMediaKeyHandling,MediaSessionService,BackgroundFetch,BackgroundSync");
 	app.commandLine.appendSwitch("disable-renderer-backgrounding");
 	app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 	app.commandLine.appendSwitch("disable-background-timer-throttling");
 	app.commandLine.appendSwitch("disable-partial-raster");
 	app.commandLine.appendSwitch("disable-low-end-device-mode");
+	app.commandLine.appendSwitch("disable-features-list", "BackgroundTimerThrottling");
+	app.commandLine.appendSwitch("disable-ipc-flooding-protection");
 
 	// ── Blink features ─────────────────────────────────────────────────────────
 	// Single call - multiple appendSwitch calls for the same flag only keep the last

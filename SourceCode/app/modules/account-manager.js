@@ -323,11 +323,28 @@ class AccountManager {
 			try {
 				this._waterAccBtnObserver.observe(document.documentElement, { childList: true, subtree: true });
 			} catch (_) { }
+			// Auto-disconnect after 15 seconds
 			setTimeout(() => {
 				try { if (this._waterAccBtnObserver) this._waterAccBtnObserver.disconnect(); } catch (_) { }
 				this._waterAccBtnObserver = null;
 			}, 15000);
 		}
+
+		// Cleanup on window unload
+		window.addEventListener('beforeunload', () => this.cleanup());
+		window.addEventListener('unload', () => this.cleanup());
+	}
+
+	/**
+	 * Cleanup observers and listeners
+	 */
+	cleanup() {
+		if (this._waterAccBtnObserver) {
+			try { this._waterAccBtnObserver.disconnect(); } catch (_) { }
+			this._waterAccBtnObserver = null;
+		}
+		this.container.removeEventListener("contextmenu", this.removeAccount);
+		document.removeEventListener("click", this.handleMenuClick);
 	}
 }
 

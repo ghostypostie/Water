@@ -10,12 +10,20 @@ const path = require("path");
  * (if any exist), and ensures the expected folder structure exists.
  *
  * Rules:
+ * - Only runs ONCE per installation (checks for .seeded flag file)
  * - Never overwrite existing user files.
  * - Create missing directories as needed.
  * - If no packaged defaults are present, still create a helpful README in the sound folder.
  */
 async function seedDefaults(appDir, swapDir) {
 	try {
+		// Check if seeding already happened
+		const seededFlag = path.join(swapDir, ".seeded");
+		if (await exists(seededFlag)) {
+			console.log("[SwapperSeeder] Already seeded, skipping");
+			return;
+		}
+
 		// Ensure base directories exist
 		await ensureDir(swapDir);
 
@@ -48,6 +56,10 @@ async function seedDefaults(appDir, swapDir) {
 		// Ensure README exists in sound folder to guide the user
 		await writeReadmeIfMissing(normalSoundDir);
 		await writeReadmeIfMissing(advancedAssetsSoundDir, true);
+
+		// Mark as seeded so this never runs again
+		await fs.promises.writeFile(seededFlag, `Seeded on ${new Date().toISOString()}`, "utf8");
+		console.log("[SwapperSeeder] Seeding complete, flag created");
 	}
 	catch (err) {
 		console.log("[SwapperSeeder] seedDefaults error:", err);

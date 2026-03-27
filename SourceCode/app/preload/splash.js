@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Handle external link clicks (Discord invites, etc.)
+  // Handle external link clicks
   document.addEventListener('click', (e) => {
     const target = e.target.closest('a[href^="http"]');
     if (target) {

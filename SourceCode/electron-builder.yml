@@ -2,8 +2,6 @@ appId: com.krunker.Water
 productName: Water
 npmRebuild: false
 copyright: © 2025 Ghosty
-asarUnpack:
-  - "**/node_modules/ffmpeg-static/**"
 win:
   icon: build/icon.ico
   target:
@@ -12,13 +10,16 @@ win:
         - x64
 nsis:
   oneClick: false
-  allowToChangeInstallationDirectory: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  perMachine: false
+  runAfterFinish: true
   createDesktopShortcut: always
-  createStartMenuShortcut: false
+  createStartMenuShortcut: true
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
   warningsAsErrors: false
-  artifactName: Water.exe
+  artifactName: Water-Setup.exe
 mac:
   icon: build/icon.png
   target:
