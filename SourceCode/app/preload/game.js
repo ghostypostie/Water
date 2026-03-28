@@ -47,12 +47,24 @@ try {
                     width: 100%;
                     height: 100%;
                     background: #000000;
-                    z-index: 999999999;
+                    z-index: 999998;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    pointer-events: all;
+                    pointer-events: none;
                     transition: opacity 0.5s ease;
+                }
+                
+                /* Loader content should capture pointer events */
+                #waterLoadingOverlay > * {
+                    pointer-events: all;
+                }
+                
+                /* Ensure Krunker error notifications show above loader (only when visible) */
+                #instructionHolder:has(#instructionsUpdate[style*="display: block"]),
+                #instructionsUpdate[style*="display: block"] {
+                    z-index: 999999 !important;
+                    position: relative !important;
                 }
                 
                 .waterLoader {
@@ -407,6 +419,34 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ==========================================
+// EARLY COMMUNITY CSS INITIALIZATION (NO UI INJECTION YET)
+// Initialize the addon early so it's ready, but don't inject buttons until after loader
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        const CommunityCSSAddon = communityCSSAddon;
+        const cssAddon = new CommunityCSSAddon();
+        
+        // Initialize CSS loader early
+        cssAddon.init().catch(e => console.error('[Water] Community CSS init error:', e));
+        
+        // Initialize mod downloader early
+        try { 
+            cssAddon.initModDownloader(); 
+            console.log('[Water] Mod downloader initialized early');
+        } catch (e) { 
+            console.error('[Water] Mod downloader init error:', e);
+        }
+        
+        // Store globally for later injection
+        window.communityCSSAddon = cssAddon;
+        console.log('[Water] Community CSS addon initialized (buttons will inject after loader)');
+    } catch (e) {
+        console.error('[Water] Community CSS initialization error:', e);
+    }
+}, { once: true });
+
+// ==========================================
 // EARLY UI INJECTION DISABLED
 // All UI elements (Water button, Alt-Manager, Mods button) now inject AFTER loader removal
 // ==========================================
@@ -518,41 +558,20 @@ UtilManager.instance.clientUtils.events.on("game-load", () => {
         console.error('[WaterClient] Failed to start keep-alive:', e);
     }
 
-    // Ensure Community CSS is ready (already injected early, just verify)
+    // Ensure Community CSS is ready (already initialized early, just verify)
     try {
         if (window.communityCSSAddon) {
             console.log('[Water] Community CSS already initialized');
-            // Ensure mod downloader is running
-            try { 
-                window.communityCSSAddon.initModDownloader(); 
-            } catch (e) { 
-                console.error('[Water] Mod downloader fallback error:', e);
-            }
+            window.communityCSSAddon.applyUIToggles();
         } else {
-            // Fallback if early injection failed
+            // Fallback if early initialization failed
+            console.warn('[Water] Community CSS not found, initializing fallback');
             const CommunityCSSAddon = communityCSSAddon;
             const cssAddon = new CommunityCSSAddon();
             cssAddon.init().catch(e => console.error('[Water] Community CSS init error:', e));
-            
-            // Initialize mod downloader
-            try { 
-                cssAddon.initModDownloader(); 
-            } catch (e) { 
-                console.error('[Water] Mod downloader fallback error:', e);
-            }
-            
-            const tryInject = () => {
-                const waterInjected = cssAddon.injectSidebarItem();
-                const modsInjected = cssAddon.injectModsSidebarItem();
-                if (!waterInjected || !modsInjected) {
-                    setTimeout(tryInject, 50);
-                } else {
-                    console.log('[Water] Community CSS injected (fallback)');
-                    window.communityCSSAddon = cssAddon;
-                    cssAddon.applyUIToggles();
-                }
-            };
-            tryInject();
+            try { cssAddon.initModDownloader(); } catch (_) {}
+            window.communityCSSAddon = cssAddon;
+            cssAddon.applyUIToggles();
         }
     } catch (e) {
         console.error('[Water] Community CSS setup error:', e);
@@ -706,6 +725,22 @@ try {
                 
                 // Remove loading screen when game is ready (if it exists)
                 setTimeout(() => {
+                    // Inject UI buttons BEFORE fade starts
+                    try {
+                        accountManager.injectStyles();
+                        console.log('[WaterClient] Alt-Manager injected');
+                        
+                        if (window.communityCSSAddon) {
+                            window.communityCSSAddon.injectSidebarItem();
+                            window.communityCSSAddon.injectModsSidebarItem();
+                            window.communityCSSAddon.applyUIToggles();
+                            console.log('[WaterClient] Water/Mods buttons injected');
+                        }
+                    } catch (e) {
+                        console.error('[WaterClient] UI injection error:', e);
+                    }
+                    
+                    // Now fade out loader
                     if (window.waterLoadingOverlay) {
                         console.log('[WaterClient] Removing loading screen...');
                         window.waterLoadingOverlay.style.opacity = '0';
@@ -713,42 +748,10 @@ try {
                             if (window.waterLoadingOverlay && window.waterLoadingOverlay.parentNode) {
                                 window.waterLoadingOverlay.parentNode.removeChild(window.waterLoadingOverlay);
                                 console.log('[WaterClient] Loading screen removed');
-                                
-                                // NOW inject UI elements after loader is gone
-                                setTimeout(() => {
-                                    try {
-                                        // Inject Alt-Manager button
-                                        accountManager.injectStyles();
-                                        console.log('[WaterClient] Alt-Manager injected after loader');
-                                        
-                                        // Inject Water & Mods buttons
-                                        if (window.communityCSSAddon) {
-                                            window.communityCSSAddon.injectSidebarItem();
-                                            window.communityCSSAddon.injectModsSidebarItem();
-                                            window.communityCSSAddon.applyUIToggles();
-                                            console.log('[WaterClient] Water/Mods buttons injected after loader');
-                                        }
-                                    } catch (e) {
-                                        console.error('[WaterClient] Post-loader UI injection error:', e);
-                                    }
-                                }, 300);
                             }
                         }, 500);
                     } else {
                         console.log('[WaterClient] No loading screen to remove (hideLoadingScreen is enabled)');
-                        // Still inject UI even if no loader
-                        setTimeout(() => {
-                            try {
-                                accountManager.injectStyles();
-                                if (window.communityCSSAddon) {
-                                    window.communityCSSAddon.injectSidebarItem();
-                                    window.communityCSSAddon.injectModsSidebarItem();
-                                    window.communityCSSAddon.applyUIToggles();
-                                }
-                            } catch (e) {
-                                console.error('[WaterClient] UI injection error (no loader):', e);
-                            }
-                        }, 300);
                     }
                 }, 500);
             });

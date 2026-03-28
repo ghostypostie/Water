@@ -1,7 +1,5 @@
 "use strict";
 
-let path = require("path");
-
 require("v8-compile-cache");
 
 let Events = require("events");

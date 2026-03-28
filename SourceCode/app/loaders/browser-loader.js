@@ -86,6 +86,7 @@ class BrowserLoader {
 		}
 
 		// Base window props
+		const isMac = process.platform === 'darwin';
 		let mainWindowProps = {
 			width: 1600,
 			height: 900,
@@ -98,12 +99,14 @@ class BrowserLoader {
 			webPreferences: {
 				preload: path.join(__dirname, "../preload/global.js"),
 				autoplayPolicy: "no-user-gesture-required",
-				enableRemoteModule: true,
+				nodeIntegration: isMac ? true : false,
 				contextIsolation: false,
+				enableRemoteModule: true,
 				backgroundThrottling: false,
 				offscreen: false,
 				spellcheck: false,
-				v8CacheOptions: "bypassHeatCheck"
+				v8CacheOptions: "bypassHeatCheck",
+				sandbox: false
 			}
 		};
 
