@@ -7,6 +7,12 @@ This client aims for:
 
 ## Best Features
 
+### Water Store
+Link your Discord with Water Client through Water Bot
+- Convert your KR into Pani by sending "GhostyPosti"
+- Pani can be used to buy Custom CSS Themes from the Water Store
+- View your Pani balance directly from Discord using Water Bot
+
 ### Better Matchmaker (F4)
 Press **F4** to instantly join a random public game with complete customization:
 - Filter by **player count** (min/max)
