@@ -61,6 +61,9 @@ Custom theme and UI toggle system:
 ### Water Customizations Window
 ![Customization menu](screenshots/water-window.png)
 
+### Chat Filters
+![Chat Filters](screenshots/chat-filters.png)
+
 ---
 
 ## Supported Platforms
