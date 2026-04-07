@@ -1,51 +1,26 @@
 {
-  "name": "Water",
-  "version": "1.0.7",
-  "description": "Fresh Water",
-  "main": "./app/main.js",
-  "private": true,
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron .",
-    "startd": "npm start -- --debug",
-    "startd-linux": "ELECTRON_ENABLE_STACK_DUMPING=1 ELECTRON_ENABLE_LOGGING=true npm start -- --debug",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder --win && powershell -Command \"Remove-Item 'dist/win-unpacked' -Recurse -Force -ErrorAction SilentlyContinue\"",
-    "release": "npm run dist",
-    "postinstall": "cross-env GYP_DEFINES=openssl_fips= npm_config_openssl_fips= electron-builder install-app-deps"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ghostypostie/Water.git"
-  },
-  "keywords": [
-    "Krunker"
-  ],
-  "author": "Ghosty",
-  "license": "AGPL-3.0-only",
-  "bugs": {
-    "url": "https://github.com/ghostypostie/Water/issues"
-  },
-  "homepage": "https://github.com/ghostypostie/Water",
-  "devDependencies": {
-    "@babel/core": "^7.13.16",
-    "@babel/eslint-parser": "^7.13.14",
-    "@babel/plugin-proposal-class-properties": "^7.13.0",
-    "@babel/plugin-proposal-private-methods": "^7.13.0",
-    "@types/node": "^12.20.55",
-    "cross-env": "^7.0.3",
-    "electron": "10.4.7",
-    "electron-builder": "^22.11.7",
-    "eslint": "^8.7.0"
-  },
-  "dependencies": {
-    "axios": "^0.27.2",
-    "electron-localshortcut": "^3.2.1",
-    "electron-log": "^4.4.8",
-    "electron-store": "^6.0.1",
-    "electron-updater": "4.3.9",
-    "v8-compile-cache": "^2.3.0",
-    "ws": "^7.5.9",
-    "yargs": "^17.1.1"
-  }
+    "name": "Water",
+    "version": "1.1.0",
+    "description": "Fresh Water",
+    "author": "Ghosty",
+    "main": "js/launch.js",
+    "devDependencies": {
+        "@types/node": "^16.18.126",
+        "@types/ws": "^8.5.10",
+        "electron": "npm:electron-nightly@12.0.0-nightly.20201116",
+        "electron-builder": "^26.8.1",
+        "typescript": "^5.3.3"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.101.1",
+        "discord-rpc-revamp": "^2.0.3",
+        "electron-store": "^8.1.0",
+        "ws": "^8.16.0"
+    },
+    "scripts": {
+        "clean:win": "rmdir /s /q js",
+        "clean:linux": "rm -rf js",
+        "transpile": "npx tsc",
+        "start": "npm run transpile && npx electron ."
+    }
 }

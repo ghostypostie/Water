@@ -1,0 +1,16 @@
+[
+    {
+        "id": "mtz",
+        "name": "MTZ Client Theme",
+        "author": "Mashtoolz",
+        "filename": "MTZ.css",
+        "thumbnail": "mtz-thumb.png"
+    },
+    {
+        "id": "aiiimpact",
+        "name": "Aiiimpact",
+        "author": "7lumed",
+        "filename": "Aiiimpact.css",
+        "thumbnail": "aiiimpact-thumb.png"
+    }
+]

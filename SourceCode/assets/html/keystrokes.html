@@ -1,0 +1,125 @@
+﻿<!-- WATER KEYSTROKES - Professional Edition -->
+
+<div class="keystrokes">
+    <!-- WASD + Q/E -->
+    <div class="wasd">
+        <div class="key" id="water_keyQ">Q</div>
+        <div class="key" id="water_keyW">W</div>
+        <div class="key" id="water_keyE">E</div>
+        <div class="key" id="water_keyA">A</div>
+        <div class="key" id="water_keyS">S</div>
+        <div class="key" id="water_keyD">D</div>
+    </div>
+
+    <!-- Mouse -->
+    <div class="mouse">
+        <div class="key" id="water_keyLMB">LMB</div>
+        <div class="key" id="water_keyRMB">RMB</div>
+    </div>
+
+    <!-- Spacebar -->
+    <div class="key space" id="water_keySPACE">SPACE</div>
+</div>
+
+<style>
+:root {
+    --water-key-scale: 1;
+    --water-key-offset-x: 0;
+    --water-key-offset-y: 0;
+}
+
+.keystrokes {
+    position: fixed;
+    top: calc((100% - 200px * var(--water-key-scale, 1)) * var(--water-key-offset-y, 0));
+    left: calc((100% - 150px * var(--water-key-scale, 1)) * var(--water-key-offset-x, 0));
+    transform: scale(var(--water-key-scale));
+    transform-origin: top left;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    user-select: none;
+    pointer-events: none;
+}
+
+
+.wasd {
+    display: grid;
+    grid-template-columns: repeat(3, 45px);
+    grid-template-rows: repeat(2, 45px);
+    gap: 6px;
+}
+
+.wasd #water_keyQ { grid-column: 1; grid-row: 1; }
+.wasd #water_keyW { grid-column: 2; grid-row: 1; }
+.wasd #water_keyE { grid-column: 3; grid-row: 1; }
+.wasd #water_keyA { grid-column: 1; grid-row: 2; }
+.wasd #water_keyS { grid-column: 2; grid-row: 2; }
+.wasd #water_keyD { grid-column: 3; grid-row: 2; }
+
+
+.mouse {
+    display: flex;
+    gap: 6px;
+    width: 141px;
+}
+
+.mouse .key {
+    flex: 1;
+    height: 38px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+
+.key {
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(20, 20, 25, 0.85);
+    border: 2px solid rgba(254, 139, 187, 0.3);
+    color: #fe8bbb;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, background, border-color;
+}
+
+
+.key.active {
+    background: linear-gradient(135deg, #fe8bbb 0%, #ff6ba8 100%);
+    border-color: #fe8bbb;
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        0 4px 12px rgba(254, 139, 187, 0.4),
+        0 0 20px rgba(254, 139, 187, 0.2);
+}
+
+
+.key.space {
+    width: 145px;
+    height: 35px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    margin-top: -4px;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+    .key {
+        transition: none !important;
+    }
+}
+</style>

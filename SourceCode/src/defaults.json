@@ -1,0 +1,19 @@
+{
+    "update": true,
+    "window": {
+        "width": 0,
+        "height": 0,
+        "x": 0,
+        "y": 0,
+        "fullscreen": false
+    },
+    "keybinds": {
+        "newGame": "F4",
+        "refresh": "F5",
+        "fullscreen": "F11",
+        "devtools": "F12"
+    },
+    "misc": {
+        "watermark": true
+    }
+}

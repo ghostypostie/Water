@@ -1,0 +1,198 @@
+﻿body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.purse {
+    height: 50px;
+    width: 50px;
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    perspective: 1000px;
+    filter: saturate(1.45) hue-rotate(2deg);
+    will-change: transform;
+}
+
+.coin {
+    height: 50px;
+    width: 50px;
+    position: absolute;
+    transform-style: preserve-3d;
+    transform-origin: 50%;
+    animation: spin 2s linear infinite;
+    will-change: transform;
+}
+
+.coin .front,
+.coin .back {
+    position: absolute;
+    height: 50px;
+    width: 50px;
+    border-radius: 50%;
+    background-size: cover;
+    background-color: #fe8bbb;
+    background-image: url('../img/logo.png');
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: antialiased;
+    font-smoothing: antialiased;
+}
+
+.coin .front {
+    transform: translateZ(2.5px);
+}
+
+.coin .back {
+    transform: translateZ(-2.5px) rotateY(180deg);
+}
+
+.coin .side {
+    width: 50px;
+    height: 50px;
+    transform: translateX(22.5px);
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+}
+
+.coin .spoke {
+    height: 50px;
+    width: 5px;
+    position: absolute;
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+}
+
+.coin .spoke:before,
+.coin .spoke:after {
+    content: '';
+    display: block;
+    height: 9.75px;
+    width: 5px;
+    position: absolute;
+    transform: rotateX(78.75deg);
+    background: #fe8bbb;
+    background: linear-gradient(to bottom, #fe8bbb 0%, #fe8bbb 74%, #d16a92 75%, #d16a92 100%);
+    background-size: 100% 2.25px;
+}
+
+.coin .spoke:before {
+    transform-origin: top center;
+}
+
+.coin .spoke:after {
+    bottom: 0;
+    transform-origin: center bottom;
+}
+
+.coin .spoke:nth-child(1) { transform: rotateY(90deg) rotateX(22.5deg); }
+.coin .spoke:nth-child(2) { transform: rotateY(90deg) rotateX(45deg); }
+.coin .spoke:nth-child(3) { transform: rotateY(90deg) rotateX(67.5deg); }
+.coin .spoke:nth-child(4) { transform: rotateY(90deg) rotateX(90deg); }
+.coin .spoke:nth-child(5) { transform: rotateY(90deg) rotateX(112.5deg); }
+.coin .spoke:nth-child(6) { transform: rotateY(90deg) rotateX(135deg); }
+.coin .spoke:nth-child(7) { transform: rotateY(90deg) rotateX(157.5deg); }
+.coin .spoke:nth-child(8) { transform: rotateY(90deg) rotateX(180deg); }
+
+@keyframes spin {
+    from {
+        transform: rotateY(0deg);
+    }
+    to {
+        transform: rotateY(360deg);
+    }
+}
+
+/* Infinite Partner Slider */
+@keyframes scroll {
+    0% {
+        transform: translateX(0);
+    }
+    100% {
+        transform: translateX(calc(-180px * 5));
+    }
+}
+
+.slider {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: none;
+    box-shadow: none;
+    height: 100px;
+    margin: auto;
+    overflow: hidden;
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 960px;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+}
+
+.slider::before,
+.slider::after {
+    background: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 100%);
+    content: "";
+    height: 100px;
+    position: absolute;
+    width: 150px;
+    z-index: 2;
+}
+
+.slider::after {
+    right: 0;
+    top: 0;
+    transform: rotateZ(180deg);
+}
+
+.slider::before {
+    left: 0;
+    top: 0;
+}
+
+.slide-track {
+    animation: scroll 30s linear infinite;
+    display: flex;
+    width: calc(180px * 10);
+    align-items: center;
+    height: 100%;
+}
+
+.slide {
+    height: 100px;
+    width: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+}
+
+.slide img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    cursor: pointer;
+    transition: transform 0.3s ease, filter 0.3s ease;
+    filter: brightness(0.9);
+    border-radius: 50%;
+}
+
+.slide img:hover {
+    transform: scale(1.15);
+    filter: brightness(1.2);
+}
