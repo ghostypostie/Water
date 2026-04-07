@@ -4,7 +4,7 @@ import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 
 import { join } from 'path';
 import { shell } from 'electron';
 import { getSwapPath, getScriptsPath } from '../utils/paths';
-const { initializeUserscripts, su } = require('./userscript-loader.js');
+import { initializeUserscripts, su } from './userscript-loader';
 import { modDownloader } from './mod-downloader';
 import config from '../config';
 
@@ -46,7 +46,7 @@ export default class Water extends Module {
     private userCSSPath: string = '';
     private localThemesPath: string = '';
     private swapperThemesPath: string = '';
-
+    
     init() {
         try {
             const manifestPath = join(__dirname, '../../assets/community-css/manifest.json');
@@ -244,12 +244,10 @@ export default class Water extends Module {
             try {
                 const menuContainer = document.getElementById('menuItemContainer');
                 if (!menuContainer) {
-                    console.log('[Water] menuItemContainer not found, retrying...');
                     return false;
                 }
 
                 if (document.getElementById('waterBtn')) {
-                    console.log('[Water] Button already exists');
                     return true;
                 }
 
@@ -268,8 +266,6 @@ export default class Water extends Module {
                 `;
 
                 menuContainer.insertBefore(btn, menuContainer.firstChild);
-
-                console.log('[Water] Button injected at position 0 of', menuContainer.children.length, 'items');
 
                 this.injectModsButton();
                 return true;
@@ -880,7 +876,7 @@ export default class Water extends Module {
                 return;
             }
 
-            const savedVars = this.config.get(`themeVars.${this.activeThemeId}`, {}) as Record<string, string>;
+            const savedVars = config.get(`themeVars.${this.activeThemeId}`, {}) as Record<string, string>;
 
             variables.forEach(({ name, value }) => {
                 const savedValue = savedVars[name] || value;
@@ -1069,9 +1065,9 @@ export default class Water extends Module {
 
     updateThemeVariable(name: string, value: string) {
         try {
-            const savedVars = this.config.get(`themeVars.${this.activeThemeId}`, {}) as Record<string, string>;
+            const savedVars = config.get(`themeVars.${this.activeThemeId}`, {}) as Record<string, string>;
             savedVars[name] = value;
-            this.config.set(`themeVars.${this.activeThemeId}`, savedVars);
+            config.set(`themeVars.${this.activeThemeId}`, savedVars);
 
             this.applyThemeVariables();
         } catch (e) {
@@ -1081,7 +1077,7 @@ export default class Water extends Module {
 
     applyThemeVariables() {
         try {
-            const savedVars = this.config.get(`themeVars.${this.activeThemeId}`, {}) as Record<string, string>;
+            const savedVars = config.get(`themeVars.${this.activeThemeId}`, {}) as Record<string, string>;
             
             let styleEl = document.getElementById('water-theme-vars') as HTMLStyleElement;
             if (!styleEl) {
