@@ -14,16 +14,6 @@ const partners = [
         name: 'Vamp',
         logo: '../img/partner3.png',
         discordInvite: 'https://discord.gg/NVpwMqGZxG'
-    },
-    {
-        name: 'Partner 4',
-        logo: '../img/logo.png',
-        discordInvite: 'https://discord.gg/partner4'
-    },
-    {
-        name: 'Partner 5',
-        logo: '../img/logo.png',
-        discordInvite: 'https://discord.gg/partner5'
     }
 ];
 
