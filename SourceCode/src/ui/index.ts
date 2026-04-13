@@ -78,5 +78,27 @@ export default abstract class UI {
 
         for(let button of this.buttons) menuWindow.append(button.generateBig());
         windowHolder.style.display = '';
+
+        // Restore scroll position on the actual scrollable element
+        const savedScroll = sessionStorage.getItem('settings-scroll-position');
+        if (savedScroll) {
+            // Try both holder and menuWindow as the scroll might be on either
+            setTimeout(() => {
+                if (holder.scrollHeight > holder.clientHeight) {
+                    holder.scrollTop = parseInt(savedScroll);
+                } else if (menuWindow.scrollHeight > menuWindow.clientHeight) {
+                    menuWindow.scrollTop = parseInt(savedScroll);
+                }
+            }, 50);
+        }
+
+        // Save scroll position - attach to both elements
+        const saveScroll = () => {
+            const scrollPos = holder.scrollTop || menuWindow.scrollTop || 0;
+            sessionStorage.setItem('settings-scroll-position', scrollPos.toString());
+        };
+
+        holder.addEventListener('scroll', saveScroll);
+        menuWindow.addEventListener('scroll', saveScroll);
     }
 }

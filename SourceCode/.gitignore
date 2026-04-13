@@ -4,3 +4,7 @@ dist/
 start.vbs
 src/preload/loader.ts
 src/modules/_*.ts
+
+# Environment variables (contains sensitive credentials)
+.env
+.env.local

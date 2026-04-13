@@ -4,6 +4,11 @@ import { Context, RunAt, fromURL } from './context';
 import ModuleManger from './module/manager';
 import { join } from 'path';
 
+// IPC handler for getting user data path
+ipcMain.on('get-user-data-path', (event) => {
+    event.returnValue = app.getPath('userData');
+});
+
 export let window: BrowserWindow;
 const userAgent =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
@@ -51,8 +56,25 @@ async function handleKeyEvent(
         default:
             if (input.key == binds.refresh) window.reload();
 
-            if (input.key == binds.fullscreen)
-                window.setFullScreen(!window.isFullScreen());
+            if (input.key == binds.fullscreen) {
+                // Respect display mode setting - don't toggle if in borderless mode
+                const displayMode = config.get('modules.display.mode', 'windowed') as string;
+                if (displayMode === 'borderless') {
+                    // Borderless mode - F11 does nothing
+                    return;
+                }
+                
+                const goFullscreen = !window.isFullScreen();
+                const targetMode = goFullscreen ? 'fullscreen' : 'windowed';
+                
+                if (goFullscreen) {
+                    window.setFullScreen(true);
+                    config.set('modules.display.mode', 'fullscreen');
+                } else {
+                    window.setFullScreen(false);
+                    config.set('modules.display.mode', 'windowed');
+                }
+            }
 
             if (input.key == binds.devtools) {
                 let devtools = window.webContents.isDevToolsOpened();

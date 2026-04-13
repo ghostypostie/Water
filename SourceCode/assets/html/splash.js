@@ -14,6 +14,11 @@ const partners = [
         name: 'Vamp',
         logo: '../img/partner3.png',
         discordInvite: 'https://discord.gg/NVpwMqGZxG'
+    },
+    {
+        name: 'WH',
+        logo: '../img/partner4.png',
+        discordInvite: 'https://discord.gg/h9V53uXpHz'
     }
 ];
 

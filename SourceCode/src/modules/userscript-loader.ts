@@ -20,7 +20,7 @@ interface UserscriptSetting {
     title: string;
     desc: string;
     value: any;
-    type: 'bool' | 'num' | 'sel' | 'color' | 'keybind';
+    type: 'bool' | 'num' | 'sel' | 'color' | 'keybind' | 'text';
     changed: (newValue: any) => void;
     min?: number;
     max?: number;
@@ -117,11 +117,13 @@ const configToSettings = (config: any, scriptName: string): { [key: string]: Use
                 setting.step = 100;
             }
         } else if (typeof value === 'string') {
-            // Check if it's a color
-            if (value.match(/^#([0-9a-fA-F]{3}){2}$/)) {
+            // Check if it's a color (hex format)
+            if (value.match(/^#([0-9a-fA-F]{3}){1,2}$/)) {
                 setting.type = 'color';
             } else {
-                continue;
+                // Use 'text' type for string inputs
+                (setting as any).type = 'text';
+                strippedConsole.log(`[Water] Adding text setting '${key}' with value: ${value}`);
             }
         } else {
             continue;
@@ -233,16 +235,20 @@ class Userscript {
                 }
             }
             
-            // Try to detect and extract config object from script content
+            // Try to detect and extract config object from script content (case-insensitive)
             if (!this.settings || Object.keys(this.settings).length === 0) {
                 try {
-                    const configMatch = this.content.match(/const\s+config\s*=\s*\{([^}]+)\}/s);
+                    // Match both 'config' and 'CONFIG' (case-insensitive)
+                    const configMatch = this.content.match(/const\s+(config|CONFIG)\s*=\s*\{([^}]+)\}/is);
                     if (configMatch) {
-                        const configStr = '{' + configMatch[1] + '}';
+                        const configStr = '{' + configMatch[2] + '}';
+                        strippedConsole.log(`[Water] Found CONFIG in ${this.name}, parsing:`, configStr);
                         const configObj = new Function('return ' + configStr)();
                         
                         this.settings = configToSettings(configObj, this.name);
                         strippedConsole.log(`[Water] Auto-detected ${Object.keys(this.settings).length} config settings from ${this.name}`);
+                    } else {
+                        strippedConsole.log(`[Water] No CONFIG object found in ${this.name}`);
                     }
                 } catch (e) {
                     strippedConsole.warn(`[Water] Failed to auto-detect config from ${this.name}:`, e);
@@ -279,9 +285,116 @@ class Userscript {
 }
 
 /**
+ * Load premium scripts from database (no local files)
+ */
+async function loadPremiumScriptsFromDatabase(config: any): Promise<Userscript[]> {
+    const premiumScripts: Userscript[] = [];
+    
+    try {
+        // Check if Discord is linked
+        const isLinked = localStorage.getItem('water_store_linked') === 'true';
+        if (!isLinked) {
+            strippedConsole.log('[Water] Discord not linked - skipping premium scripts');
+            return premiumScripts;
+        }
+        
+        // Get client ID and Discord ID
+        const clientId = localStorage.getItem('water_client_id');
+        if (!clientId) return premiumScripts;
+        
+        const { getSupabaseClient } = require('../utils/supabase');
+        const supabase = getSupabaseClient();
+        if (!supabase) return premiumScripts;
+        
+        const { data: profileData } = await supabase.from('user_profiles').select('discord_id').eq('client_id', clientId).limit(1);
+        if (!profileData || profileData.length === 0) return premiumScripts;
+        
+        const discordId = profileData[0].discord_id;
+        
+        // Get purchased scripts
+        const { data: purchases } = await supabase.from('user_purchases').select('item_id').eq('discord_id', discordId);
+        if (!purchases || purchases.length === 0) return premiumScripts;
+        
+        const itemIds = purchases.map((p: any) => p.item_id);
+        
+        // Get script details
+        const { data: items } = await supabase.from('premium_items').select('id, name, github_path').eq('type', 'userscript').in('id', itemIds);
+        if (!items || items.length === 0) return premiumScripts;
+        
+        // Fetch and create userscript objects
+        const { fetchGitHubContent } = require('../utils/github');
+        
+        for (const item of items) {
+            try {
+                const result = await fetchGitHubContent(item.github_path);
+                if (result.success && result.content) {
+                    // Create userscript object manually without reading from file
+                    const script = Object.create(Userscript.prototype);
+                    script.hasRan = false;
+                    script.strictMode = false;
+                    script.name = item.name + '.js';
+                    script.fullpath = `premium:${item.id}`;
+                    script.meta = false;
+                    script.unload = false;
+                    script.settings = {};
+                    script.runAt = 'document-end';
+                    script.priority = 0;
+                    script.content = '// Licensed to Discord ID: ' + discordId + '\n' + result.content;
+                    
+                    // Bind the load method from prototype
+                    script.load = Userscript.prototype.load.bind(script);
+                    
+                    // Check for strict mode
+                    if (script.content.startsWith('"use strict"')) {
+                        script.strictMode = true;
+                    }
+                    
+                    // Parse metadata if present
+                    if (script.content.includes('// ==UserScript==') && script.content.includes('// ==/UserScript==')) {
+                        let chunk = script.content.split('\n');
+                        const startLine = chunk.findIndex(line => line.includes('// ==UserScript=='));
+                        const endLine = chunk.findIndex(line => line.includes('// ==/UserScript=='));
+
+                        if (startLine !== -1 && endLine !== -1) {
+                            const metaChunk = chunk.slice(startLine, endLine + 1).join('\n');
+                            script.meta = parseMetadata(metaChunk);
+
+                            // Parse @run-at
+                            if (script.meta && 'run-at' in script.meta && script.meta['run-at'] === 'document-start') {
+                                script.runAt = 'document-start';
+                            }
+
+                            // Parse @priority
+                            if (script.meta && 'priority' in script.meta && typeof script.meta['priority'] === "string") {
+                                try {
+                                    script.priority = parseInt(script.meta['priority']);
+                                } catch (e) {
+                                    script.priority = 0;
+                                }
+                            }
+                        }
+                    }
+                    
+                    premiumScripts.push(script);
+                    strippedConsole.log(`[Water] Loaded premium script: ${item.name}`);
+                }
+            } catch (err) {
+                strippedConsole.error(`[Water] Failed to load premium script ${item.name}:`, err);
+            }
+        }
+        
+        strippedConsole.log(`[Water] Loaded ${premiumScripts.length} premium scripts from database`);
+    } catch (err) {
+        strippedConsole.error('[Water] Failed to load premium scripts from database:', err);
+    }
+    
+    return premiumScripts;
+}
+
+/**
  * Initialize userscripts
  */
-export function initializeUserscripts(userscriptsPath: string, config: any) {
+export async function initializeUserscripts(userscriptsPath: string, config: any) {
     su.userscriptsPath = userscriptsPath;
     su.config = config;
 
@@ -305,6 +418,10 @@ export function initializeUserscripts(userscriptsPath: string, config: any) {
                 name: entry.name,
                 fullpath: pathResolve(su.userscriptsPath, entry.name).toString()
             }));
+
+        // Load premium scripts from database (async)
+        const premiumScripts = await loadPremiumScriptsFromDatabase(config);
+        su.userscripts.push(...premiumScripts);
 
         // Sort userscripts by priority (descending)
         su.userscripts = su.userscripts.sort((a, b) => b.priority - a.priority);

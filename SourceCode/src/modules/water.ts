@@ -216,11 +216,15 @@ export default class Water extends Module {
     renderer() {
         this.injectWaterButtonCSS();
         this.injectWaterButton();
+        this.injectCompWaterButton();
         this.applyUIToggles();
         
         if (this.activeThemeId && this.activeThemeId !== 'default') {
             this.applyTheme(this.activeThemeId);
         }
+
+        // Load premium theme if one is active
+        this.loadActivePremiumTheme();
 
         modDownloader.init();
         
@@ -360,6 +364,75 @@ export default class Water extends Module {
         } catch (e) {
             console.error('[Water] Mods button inject error:', e);
         }
+    }
+
+    injectCompWaterButton() {
+        const doInject = () => {
+            try {
+                const compBtnLst = document.getElementById('compBtnLst');
+                if (!compBtnLst) {
+                    return false;
+                }
+
+                if (document.getElementById('compWaterBtn')) {
+                    return true;
+                }
+
+                const btn = document.createElement('div');
+                btn.id = 'compWaterBtn';
+                btn.className = 'compMenBtnS';
+                btn.setAttribute('onmouseenter', 'SOUND.play("tick_0",.1)');
+                btn.style.backgroundColor = '#ff69b4';
+                btn.onclick = () => {
+                    if (typeof (window as any).playSelect === 'function') (window as any).playSelect();
+                    this.openWaterWindow();
+                };
+
+                btn.innerHTML = `
+                    <span class="material-icons" style="color:#fff;font-size:40px;vertical-align:middle;margin-bottom:12px">water_drop</span>
+                `;
+
+                compBtnLst.insertBefore(btn, compBtnLst.firstChild);
+
+                console.log('[Water] Comp button injected successfully');
+                return true;
+            } catch (e) {
+                console.error('[Water] Comp button inject error:', e);
+                return false;
+            }
+        };
+
+        if (doInject()) return;
+
+        let attempts = 0;
+        const retry = () => {
+            attempts++;
+            if (attempts > 30) {
+                console.error('[Water] Failed to inject comp button after 30 attempts');
+                return;
+            }
+            if (!doInject()) {
+                setTimeout(retry, 500);
+            }
+        };
+        setTimeout(retry, 500);
+
+        const observer = new MutationObserver(() => {
+            if (!document.getElementById('compWaterBtn')) {
+                const compBtnLst = document.getElementById('compBtnLst');
+                if (compBtnLst && compBtnLst.children.length > 0) {
+                    doInject();
+                }
+            }
+        });
+
+        const watchForContainer = setInterval(() => {
+            const compBtnLst = document.getElementById('compBtnLst');
+            if (compBtnLst) {
+                clearInterval(watchForContainer);
+                observer.observe(compBtnLst, { childList: true });
+            }
+        }, 500);
     }
 
     openWaterWindow() {
@@ -853,9 +926,14 @@ export default class Water extends Module {
             
             if (!section || !container) return;
 
+            // Check if it's a Water community theme
             const isWaterTheme = this.builtinThemes.some(t => t.id === this.activeThemeId);
             
-            if (!isWaterTheme) {
+            // Check if it's a premium theme
+            const premiumThemeId = localStorage.getItem('water-active-premium-theme');
+            const hasPremiumTheme = !!premiumThemeId;
+            
+            if (!isWaterTheme && !hasPremiumTheme) {
                 section.style.display = 'none';
                 return;
             }
@@ -863,13 +941,24 @@ export default class Water extends Module {
             section.style.display = 'block';
             container.innerHTML = '';
 
-            const styleEl = document.getElementById('water-community-css') as HTMLStyleElement;
-            if (!styleEl || !styleEl.sheet) {
-                container.innerHTML = '<div class="no-items-msg">No variables found in this theme.</div>';
-                return;
+            let variables: Array<{ name: string; value: string }> = [];
+
+            // Get variables from community theme
+            if (isWaterTheme) {
+                const styleEl = document.getElementById('water-community-css') as HTMLStyleElement;
+                if (styleEl && styleEl.sheet) {
+                    variables = this.parseCSSVariables(styleEl.sheet);
+                }
             }
 
-            const variables = this.parseCSSVariables(styleEl.sheet);
+            // Get variables from premium theme
+            if (hasPremiumTheme) {
+                const premiumStyleEl = document.getElementById('water-premium-theme') as HTMLStyleElement;
+                if (premiumStyleEl && premiumStyleEl.sheet) {
+                    const premiumVars = this.parseCSSVariables(premiumStyleEl.sheet);
+                    variables = [...variables, ...premiumVars];
+                }
+            }
             
             if (variables.length === 0) {
                 container.innerHTML = '<div class="no-items-msg">No variables found in this theme.</div>';
@@ -1043,6 +1132,7 @@ export default class Water extends Module {
         const variables: Array<{ name: string; value: string }> = [];
 
         try {
+            // Try to parse from cssRules first
             for (let i = 0; i < sheet.cssRules.length; i++) {
                 const rule = sheet.cssRules[i];
 
@@ -1056,8 +1146,42 @@ export default class Water extends Module {
                     }
                 }
             }
+            
+            // If no variables found from cssRules, try parsing from ownerNode textContent
+            if (variables.length === 0 && sheet.ownerNode) {
+                const styleEl = sheet.ownerNode as HTMLStyleElement;
+                if (styleEl.textContent) {
+                    const rootMatch = styleEl.textContent.match(/:root\s*\{([^}]+)\}/);
+                    if (rootMatch) {
+                        const rootContent = rootMatch[1];
+                        const varMatches = rootContent.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g);
+                        for (const match of varMatches) {
+                            variables.push({ name: match[1].trim(), value: match[2].trim() });
+                        }
+                    }
+                }
+            }
         } catch (e) {
             console.error('[Water] Error parsing CSS variables:', e);
+            
+            // Final fallback: try to parse from textContent directly
+            try {
+                if (sheet.ownerNode) {
+                    const styleEl = sheet.ownerNode as HTMLStyleElement;
+                    if (styleEl.textContent) {
+                        const rootMatch = styleEl.textContent.match(/:root\s*\{([^}]+)\}/);
+                        if (rootMatch) {
+                            const rootContent = rootMatch[1];
+                            const varMatches = rootContent.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g);
+                            for (const match of varMatches) {
+                                variables.push({ name: match[1].trim(), value: match[2].trim() });
+                            }
+                        }
+                    }
+                }
+            } catch (fallbackError) {
+                console.error('[Water] Fallback CSS parsing also failed:', fallbackError);
+            }
         }
 
         return variables;
@@ -1160,19 +1284,96 @@ export default class Water extends Module {
         }
     }
 
+    async loadActivePremiumTheme() {
+        try {
+            const premiumThemeId = localStorage.getItem('water-active-premium-theme');
+            if (!premiumThemeId) {
+                console.log('[Water] No active premium theme');
+                return;
+            }
+
+            console.log('[Water] Loading premium theme:', premiumThemeId);
+
+            // Get Supabase client from store module
+            const waterGlobal = (window as any).water;
+            if (!waterGlobal || !waterGlobal.modules) {
+                console.error('[Water] Water global not found');
+                return;
+            }
+
+            const storeModule = waterGlobal.modules.find((m: any) => m.id === 'store');
+            if (!storeModule) {
+                console.error('[Water] Store module not found');
+                return;
+            }
+
+            const supabase = storeModule.supabase;
+            if (!supabase) {
+                console.error('[Water] Supabase not initialized');
+                return;
+            }
+
+            // Fetch theme from Supabase
+            const { data: item, error } = await supabase
+                .from('premium_items')
+                .select('css_url')
+                .eq('id', premiumThemeId)
+                .single();
+
+            if (error || !item || !item.css_url) {
+                console.error('[Water] Failed to fetch premium theme:', error);
+                return;
+            }
+
+            // Fetch CSS content from GitHub
+            const response = await fetch(item.css_url);
+            if (!response.ok) {
+                console.error('[Water] Failed to fetch CSS from:', item.css_url);
+                return;
+            }
+
+            const cssContent = await response.text();
+
+            // Apply CSS
+            let styleEl = document.getElementById('water-premium-theme');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'water-premium-theme';
+                document.head.appendChild(styleEl);
+            }
+            styleEl.textContent = cssContent;
+
+            console.log('[Water] Premium theme loaded successfully');
+
+            // Apply theme variables after loading premium theme
+            this.applyThemeVariables();
+        } catch (e) {
+            console.error('[Water] Failed to load premium theme:', e);
+        }
+    }
+
     resetTheme() {
         try {
+            // Remove community CSS
             const el = document.getElementById('water-community-css');
             if (el) el.remove();
             
+            // Remove theme variables
             const varsEl = document.getElementById('water-theme-vars');
             if (varsEl) varsEl.remove();
             
+            // Remove premium theme CSS
+            const premiumEl = document.getElementById('water-premium-theme');
+            if (premiumEl) premiumEl.remove();
+            
+            // Clear active theme IDs
             this.activeThemeId = 'default';
             localStorage.setItem('water-active-theme', 'default');
+            localStorage.removeItem('water-active-premium-theme');
+            
             this.renderThemes();
             this.renderThemeVariables();
-            console.log('[Water] CSS reset to default');
+            console.log('[Water] All CSS reset to default');
         } catch (e) {
             console.error('[Water] Failed to reset CSS:', e);
         }
@@ -1439,6 +1640,18 @@ export default class Water extends Module {
                             onclick="window.recordKeybind('${scriptName}', '${settingKey}', this)">
                         ${displayKey}
                     </button>
+                `;
+                break;
+
+            case 'text':
+                if (typeof setting.value !== 'string') return '';
+                const escapedValue = setting.value.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                controlHTML = `
+                    <input type="text" id="${settingId}"
+                           value="${escapedValue}"
+                           class="inputGrey2"
+                           style="min-width: 200px; padding: 8px 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; color: rgba(255, 255, 255, 0.9);"
+                           onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
                 `;
                 break;
 

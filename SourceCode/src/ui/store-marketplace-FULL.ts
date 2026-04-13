@@ -158,7 +158,7 @@ export default class StoreInventoryUI extends UI {
             // Get user's purchases
             const { data: purchases, error } = await supabase
                 .from('user_purchases')
-                .select('item_id, purchased_at')
+                .select('theme_id, purchased_at')
                 .eq('discord_id', discordId)
                 .order('purchased_at', { ascending: false });
 
@@ -168,22 +168,22 @@ export default class StoreInventoryUI extends UI {
                 content.innerHTML = `
                     <div style="text-align: center; color: rgba(255,255,255,0.6); padding: 60px 20px;">
                         <div style="font-size: 48px; margin-bottom: 20px;">📦</div>
-                        <p style="font-size: 18px; margin-bottom: 10px;">No Items Yet</p>
-                        <p style="font-size: 14px; margin-bottom: 20px;">Visit the marketplace to purchase items</p>
+                        <p style="font-size: 18px; margin-bottom: 10px;">No Themes Yet</p>
+                        <p style="font-size: 14px; margin-bottom: 20px;">Visit the marketplace to purchase themes</p>
                     </div>
                 `;
                 return;
             }
 
-            // Get item details for all purchases
-            const itemIds = purchases.map((p: any) => p.item_id);
-            const { data: items } = await supabase
-                .from('premium_items')
-                .select('id, name, author, description, thumbnail_url, type')
-                .in('id', itemIds);
+            // Get theme details for all purchases
+            const themeIds = purchases.map((p: any) => p.theme_id);
+            const { data: themes } = await supabase
+                .from('premium_themes')
+                .select('id, name, author, description, thumbnail_url')
+                .in('id', themeIds);
 
-            if (!items || items.length === 0) {
-                content.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.6); padding: 40px;"><p>No item details found</p></div>';
+            if (!themes || themes.length === 0) {
+                content.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.6); padding: 40px;"><p>No theme details found</p></div>';
                 return;
             }
 
@@ -191,11 +191,9 @@ export default class StoreInventoryUI extends UI {
             const activeThemeId = localStorage.getItem('water-active-premium-theme');
 
             // Render inventory grid
-            const itemCards = items.map((item: any) => {
-                const isActive = item.id === activeThemeId && item.type === 'css_theme';
-                const thumbnailUrl = item.thumbnail_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23333" width="100" height="100"/%3E%3C/svg%3E';
-                const typeLabel = item.type === 'css_theme' ? 'CSS THEME' : item.type === 'userscript' ? 'SCRIPT' : 'FEATURE';
-                const canApply = item.type === 'css_theme';
+            const themeCards = themes.map((theme: any) => {
+                const isActive = theme.id === activeThemeId;
+                const thumbnailUrl = theme.thumbnail_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23333" width="100" height="100"/%3E%3C/svg%3E';
                 
                 return `
                     <div style="
@@ -207,7 +205,6 @@ export default class StoreInventoryUI extends UI {
                         position: relative;
                     " onmouseover="this.style.borderColor='rgba(255, 105, 180, 0.5)'" onmouseout="this.style.borderColor='${isActive ? 'rgba(0, 255, 0, 0.6)' : 'rgba(255, 255, 255, 0.05)'}'">
                         ${isActive ? '<div style="position: absolute; top: 10px; right: 10px; background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; z-index: 10;">ACTIVE</div>' : ''}
-                        <div style="position: absolute; top: 10px; left: 10px; background: #ff69b4; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; z-index: 10;">${typeLabel}</div>
                         <div style="
                             width: 100%;
                             height: 150px;
@@ -217,16 +214,16 @@ export default class StoreInventoryUI extends UI {
                             justify-content: center;
                             overflow: hidden;
                         ">
-                            <img src="${thumbnailUrl}" alt="${item.name}" style="width: 100%; height: 100%; object-fit: cover;" />
+                            <img src="${thumbnailUrl}" alt="${theme.name}" style="width: 100%; height: 100%; object-fit: cover;" />
                         </div>
                         <div style="padding: 15px;">
                             <div style="font-size: 16px; font-weight: 600; color: rgba(255, 255, 255, 0.9); margin-bottom: 5px;">
-                                ${item.name}
+                                ${theme.name}
                             </div>
                             <div style="font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-bottom: 15px;">
-                                By ${item.author}
+                                By ${theme.author}
                             </div>
-                            ${canApply ? `<button id="apply-inv-${item.id}" style="
+                            <button id="apply-inv-${theme.id}" style="
                                 width: 100%;
                                 background: ${isActive ? 'rgba(255, 255, 255, 0.1)' : '#ff69b4'};
                                 color: white;
@@ -236,13 +233,13 @@ export default class StoreInventoryUI extends UI {
                                 cursor: ${isActive ? 'not-allowed' : 'pointer'};
                                 font-size: 13px;
                                 font-weight: 600;
-                            " ${isActive ? 'disabled' : ''}>${isActive ? 'Currently Active' : 'Apply Theme'}</button>` : `<div style="text-align: center; color: rgba(255, 255, 255, 0.5); font-size: 12px; padding: 10px;">Installed</div>`}
+                            " ${isActive ? 'disabled' : ''}>${isActive ? 'Currently Active' : 'Apply Theme'}</button>
                         </div>
                     </div>
                 `;
             }).join('');
 
-            content.innerHTML = `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;">${itemCards}</div>`;
+            content.innerHTML = `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;">${themeCards}</div>`;
 
             // Attach event listeners using event delegation
             content.addEventListener('click', (e) => {
@@ -250,8 +247,8 @@ export default class StoreInventoryUI extends UI {
                 const applyBtn = target.closest('[id^="apply-inv-"]');
 
                 if (applyBtn && !applyBtn.hasAttribute('disabled')) {
-                    const itemId = applyBtn.id.replace('apply-inv-', '');
-                    this.applyThemeFromInventory(itemId);
+                    const themeId = applyBtn.id.replace('apply-inv-', '');
+                    this.applyThemeFromInventory(themeId);
                 }
             });
 

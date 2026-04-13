@@ -33,47 +33,40 @@ export default class Performance extends Module {
     priority = 1; // Display at the top of settings
 
     switchList = [
-        'renderer-process-limit=100',
-        'max-active-webgl-contexts=100',
-        'disable-dev-shm-usage',
-        'enable-gpu-rasterization',
-        'enable-oop-rasterization',
-        'enable-webgl',
-        'enable-javascript-harmony',
-        'enable-future-v8-vm-features',
-        'enable-quic',
-        'enable-accelerated-2d-canvas',
-        'enable-highres-timer',
-        'disable-accelerated-video-decode=false',
-        'disable-accelerated-video-encode=false',
-        'disable-print-preview',
-        'disable-metrics-repo',
-        'disable-metrics',
+        // Core performance switches (tested and safe)
         'disable-breakpad',
+        'disable-metrics',
+        'disable-metrics-repo',
         'disable-logging',
-        'disable-component-update',
-        'disable-bundled-ppapi-flash',
-        'disable-2d-canvas-clip-aa',
         'disable-hang-monitor',
-        'autoplay-policy=no-user-gesture-required',
-        'high-dpi-support=1',
-        'ignore-gpu-blacklist',
         'disable-background-timer-throttling',
         'disable-renderer-backgrounding',
-        'disable-software-rasterizer',
-        'enable-zero-copy',
-        'enable-native-gpu-memory-buffers',
-        'disable-gpu-driver-bug-workarounds',
-        'enable-webgl2-compute-context',
-        'disable-features=CalculateNativeWinOcclusion',
         'disable-background-networking',
         'disable-sync',
-        'disable-extensions',
         'disable-default-apps',
+        'disable-extensions',
         'no-pings',
         'disable-domain-reliability',
-        'disable-client-side-phishing-detection',
-        'disable-component-extensions-with-background-pages',
+        'disable-component-update',
+        'disable-print-preview',
+        'autoplay-policy=no-user-gesture-required',
+        // GPU optimizations (safe)
+        'ignore-gpu-blacklist',
+        'enable-gpu-rasterization',
+        'enable-zero-copy',
+        'enable-accelerated-2d-canvas',
+        'enable-accelerated-video-decode',
+        'num-raster-threads=4',
+        // WebGL optimizations (safe)
+        'enable-webgl',
+        'enable-webgl2-compute-context',
+        'max-active-webgl-contexts=100',
+        // Memory optimizations (safe)
+        'renderer-process-limit=100',
+        'disable-dev-shm-usage',
+        // Network optimizations (safe)
+        'enable-quic',
+        'enable-highres-timer',
     ];
 
     switchesUI = new SwitchesUI(this);
@@ -155,9 +148,25 @@ export default class Performance extends Module {
             app.commandLine.appendSwitch(name, value || '');
         }
 
-        app.commandLine.appendSwitch('enable-features', 'ImplLatencyRecovery,MainLatencyRecovery,VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
+        // Minimal safe feature flags
+        const enableFeatures = [
+            'VaapiVideoDecoder',
+            'CanvasOopRasterization',
+        ];
+        
+        const disableFeatures = [
+            'UseChromeOSDirectVideoDecoder',
+        ];
+
+        app.commandLine.appendSwitch('enable-features', enableFeatures.join(','));
+        app.commandLine.appendSwitch('disable-features', disableFeatures.join(','));
 
         if (this.config.get('inProcessGPU', false))
             app.commandLine.appendSwitch('in-process-gpu');
+        
+        // Force hardware acceleration
+        app.commandLine.appendSwitch('ignore-gpu-blocklist');
+        app.commandLine.appendSwitch('enable-gpu-rasterization');
+        app.commandLine.appendSwitch('enable-zero-copy');
     }
 }

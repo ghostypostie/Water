@@ -205,6 +205,28 @@ export default class Chat extends Module {
     categorizeMessage(elem: HTMLElement) {
         let msgNode = elem.firstChild;
 
+        // Check if message has the server color (#fc03ec or similar purple variants)
+        const msgSpan = elem.querySelector('.chatMsg');
+        if (msgSpan) {
+            const color = window.getComputedStyle(msgSpan).color;
+            // Convert rgb to hex and check if it matches server message colors
+            const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+            if (rgbMatch) {
+                const r = parseInt(rgbMatch[1]);
+                const g = parseInt(rgbMatch[2]);
+                const b = parseInt(rgbMatch[3]);
+                
+                // Check for purple-ish colors (server messages)
+                // #fc03ec = rgb(252, 3, 236) - bright magenta/purple
+                // #aa00ff = rgb(170, 0, 255) - purple
+                // Allow some tolerance for similar colors
+                if (r > 150 && g < 50 && b > 200) {
+                    elem.classList.add('msg--server');
+                    return;
+                }
+            }
+        }
+
         if (msgNode.childNodes.length > 1) elem.classList.add('msg--player');
         else {
             if (msgNode.firstChild.childNodes.length > 1) {

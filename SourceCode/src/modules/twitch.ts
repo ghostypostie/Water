@@ -69,29 +69,102 @@ export default class TwitchChat extends Module {
     }
 
     setupTwitchFilter() {
-        // Intercept chat input to handle /twitch command
-        const chatInput = document.getElementById('chatInput') as HTMLInputElement;
-        if (!chatInput) return;
-
-        const originalKeyDown = chatInput.onkeydown;
-        
-        chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && chatInput.value.trim() === '/twitch') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.toggleTwitchFilter();
-                chatInput.value = '';
-                return false;
+        // Wait for chat input to be available
+        const waitForChatInput = () => {
+            const chatInput = document.getElementById('chatInput') as HTMLInputElement;
+            if (!chatInput) {
+                setTimeout(waitForChatInput, 500);
+                return;
             }
-        }, true);
+
+            logger.log('Setting up /twitch command filter');
+
+            // Handler function
+            const handleTwitchCommand = (e: KeyboardEvent) => {
+                const value = chatInput.value.trim();
+                logger.log(`Key pressed: ${e.key}, Input value: "${value}"`);
+                
+                if (e.key === 'Enter' && value === '/twitch') {
+                    logger.log('Twitch command detected! Intercepting...');
+                    
+                    // Stop all event propagation
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    
+                    // Clear input immediately
+                    chatInput.value = '';
+                    
+                    // Toggle filter
+                    this.toggleTwitchFilter();
+                    
+                    // Blur input to close chat
+                    setTimeout(() => {
+                        chatInput.blur();
+                    }, 10);
+                    
+                    return false;
+                }
+            };
+
+            // Try multiple event interception strategies
+            // Strategy 1: Capture phase keydown (highest priority)
+            chatInput.addEventListener('keydown', handleTwitchCommand, { capture: true });
+            
+            // Strategy 2: Bubble phase keydown (backup)
+            chatInput.addEventListener('keydown', handleTwitchCommand, { capture: false });
+            
+            // Strategy 3: Keypress event (older browsers/different timing)
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && chatInput.value.trim() === '/twitch') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, { capture: true });
+
+            // Strategy 4: Monitor input changes and intercept before submission
+            let lastValue = '';
+            chatInput.addEventListener('input', () => {
+                lastValue = chatInput.value;
+            });
+
+            // Strategy 5: Override the form submission if chat is in a form
+            const chatForm = chatInput.closest('form');
+            if (chatForm) {
+                chatForm.addEventListener('submit', (e) => {
+                    if (chatInput.value.trim() === '/twitch') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        chatInput.value = '';
+                        this.toggleTwitchFilter();
+                        chatInput.blur();
+                        return false;
+                    }
+                }, { capture: true });
+            }
+
+            logger.log('/twitch command filter ready with multiple interception strategies');
+        };
+
+        waitForChatInput();
     }
 
     toggleTwitchFilter() {
         const chatList = document.getElementById('chatList');
-        if (!chatList) return;
+        if (!chatList) {
+            logger.error('chatList not found - cannot toggle filter');
+            console.error('[Water] [Twitch] chatList element not found');
+            return;
+        }
 
         const allMessages = chatList.querySelectorAll('[id^="chatMsg_"]');
         const isTwitchFilterActive = chatList.getAttribute('data-twitch-filter') === 'true';
+
+        logger.log(`Toggling Twitch filter. Current state: ${isTwitchFilterActive ? 'ON' : 'OFF'}`);
+        console.log(`[Water] [Twitch] Filter toggled. New state: ${!isTwitchFilterActive ? 'ON' : 'OFF'}`);
 
         if (isTwitchFilterActive) {
             // Show all messages
@@ -99,7 +172,7 @@ export default class TwitchChat extends Module {
                 (msg as HTMLElement).style.display = '';
             });
             chatList.setAttribute('data-twitch-filter', 'false');
-            this.showFilterNotification('Showing all chat', '#00FF00');
+            this.showFilterNotification('✓ Showing all chat', '#00FF00');
             
             // Stop observing
             if (this.chatObserver) {
@@ -108,12 +181,16 @@ export default class TwitchChat extends Module {
             }
         } else {
             // Show only Twitch messages
+            const twitchCount = Array.from(allMessages).filter(msg => 
+                msg.getAttribute('data-twitch') === 'true'
+            ).length;
+            
             allMessages.forEach(msg => {
                 const isTwitch = msg.getAttribute('data-twitch') === 'true';
                 (msg as HTMLElement).style.display = isTwitch ? '' : 'none';
             });
             chatList.setAttribute('data-twitch-filter', 'true');
-            this.showFilterNotification('Showing Twitch chat only (type /twitch to toggle)', '#9147FF');
+            this.showFilterNotification(`✓ Twitch filter ON (${twitchCount} messages) - type /twitch to toggle`, '#9147FF');
             
             // Start observing for new messages
             this.startChatObserver();
@@ -154,22 +231,38 @@ export default class TwitchChat extends Module {
     }
 
     showFilterNotification(message: string, color: string) {
+        logger.log(`Filter notification: ${message}`);
+        console.log(`[Water] [Twitch] ${message}`);
+        
         const chatList = document.getElementById('chatList');
-        if (!chatList) return;
+        if (!chatList) {
+            logger.warn('chatList not found for notification');
+            return;
+        }
 
         // Get next message ID
         const existingMsgs = chatList.querySelectorAll('[id^="chatMsg_"]');
         let maxId = -1;
         existingMsgs.forEach(msg => {
             const id = parseInt(msg.id.replace('chatMsg_', ''));
-            if (id > maxId) maxId = id;
+            if (!isNaN(id) && id > maxId) maxId = id;
         });
         const newId = maxId + 1;
 
-        // Create message container
+        // Create message container with more prominent styling
         const chatMsgContainer = document.createElement('div');
         chatMsgContainer.setAttribute('data-tab', '0');
+        chatMsgContainer.setAttribute('data-twitch', 'true'); // Mark as Twitch so it's not hidden by Twitch filter
+        chatMsgContainer.classList.add('vanillaChatMsg'); // Add vanilla class for compatibility
+        chatMsgContainer.classList.add('msg--server'); // Categorize as server message so it respects chat filters
         chatMsgContainer.id = `chatMsg_${newId}`;
+        chatMsgContainer.style.backgroundColor = 'rgba(145, 71, 255, 0.2)';
+        chatMsgContainer.style.borderLeft = `4px solid ${color}`;
+        chatMsgContainer.style.borderRight = `4px solid ${color}`;
+        chatMsgContainer.style.padding = '8px';
+        chatMsgContainer.style.marginBottom = '4px';
+        chatMsgContainer.style.borderRadius = '4px';
+        chatMsgContainer.style.boxShadow = '0 2px 8px rgba(145, 71, 255, 0.3)';
 
         // Create chat item
         const chatItem = document.createElement('div');
@@ -180,7 +273,9 @@ export default class TwitchChat extends Module {
         messageSpan.className = 'chatMsg';
         messageSpan.style.color = color;
         messageSpan.style.fontWeight = 'bold';
-        messageSpan.textContent = message;
+        messageSpan.style.fontSize = '14px';
+        messageSpan.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
+        messageSpan.textContent = `[Twitch Filter] ${message}`;
 
         chatItem.appendChild(messageSpan);
         chatMsgContainer.appendChild(chatItem);
@@ -188,9 +283,18 @@ export default class TwitchChat extends Module {
         chatList.appendChild(chatMsgContainer);
         chatList.scrollTop = chatList.scrollHeight;
 
+        // Remove after 7 seconds (increased from 5)
         setTimeout(() => {
-            chatMsgContainer.remove();
-        }, 3000);
+            if (chatMsgContainer.parentNode) {
+                chatMsgContainer.style.transition = 'opacity 0.5s';
+                chatMsgContainer.style.opacity = '0';
+                setTimeout(() => {
+                    if (chatMsgContainer.parentNode) {
+                        chatMsgContainer.remove();
+                    }
+                }, 500);
+            }
+        }, 7000);
     }
 
     connect(channelName: string) {
@@ -326,6 +430,9 @@ export default class TwitchChat extends Module {
 
         const chatMsgContainer = document.createElement('div');
         chatMsgContainer.setAttribute('data-tab', '0');
+        chatMsgContainer.setAttribute('data-twitch', 'true'); // Mark as Twitch
+        chatMsgContainer.classList.add('vanillaChatMsg'); // Add vanilla class for compatibility
+        chatMsgContainer.classList.add('msg--server'); // Categorize as server message
         chatMsgContainer.id = `chatMsg_${newId}`;
 
         const chatItem = document.createElement('div');
@@ -380,6 +487,8 @@ export default class TwitchChat extends Module {
         const chatMsgContainer = document.createElement('div');
         chatMsgContainer.setAttribute('data-tab', '0');
         chatMsgContainer.setAttribute('data-twitch', 'true'); // Mark as Twitch message
+        chatMsgContainer.classList.add('vanillaChatMsg'); // Add vanilla class for compatibility
+        chatMsgContainer.classList.add('msg--player'); // Categorize as player message so it respects chat filters
         chatMsgContainer.id = `chatMsg_${newId}`;
 
         const chatItem = document.createElement('div');

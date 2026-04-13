@@ -442,7 +442,3 @@ input[type=number] {
 #spectateUI, #inGameUI {
     display: block!important
 } */
-
-#accManagerBtn {
-	width: 350px !important;
-}

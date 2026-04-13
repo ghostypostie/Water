@@ -51,14 +51,15 @@ export default class Manager {
         this.injectSettings();
 
         let modules = this.listAll();
-        for (let module of modules) {
-            if (
-                module.contexts.findIndex(
-                    (ctx) => ctx.context == this.context && ctx.runAt == runAt
-                ) == -1
-            )
-                continue;
-
+        
+        // Performance: Filter modules before iteration
+        const relevantModules = modules.filter(module => 
+            module.contexts.findIndex(
+                (ctx) => ctx.context == this.context && ctx.runAt == runAt
+            ) !== -1
+        );
+        
+        for (let module of relevantModules) {
             module.manager = this;
 
             try {
@@ -68,7 +69,7 @@ export default class Manager {
                     `Error while initializing module ${module.name}:`,
                     initError
                 );
-                return;
+                continue; // Continue loading other modules instead of returning
             }
 
             try {
@@ -85,7 +86,7 @@ export default class Manager {
                     `Error while running module ${module.name}:`,
                     moduleError
                 );
-                return;
+                continue; // Continue loading other modules instead of returning
             }
 
             this.loaded.push(module);
@@ -108,8 +109,28 @@ export default class Manager {
                 window.windows[0]
         );
 
+        // Rename "Client" tab to "Water" immediately
+        if (settings.tabs && settings.tabs[1]) {
+            for (let tab of settings.tabs[1]) {
+                if (tab.name === 'Client') {
+                    tab.name = 'Water';
+                    break;
+                }
+            }
+        }
+
         let gen = settings.getSettings;
         settings.getSettings = (...args) => {
+            // Rename tab every time settings are opened (in case it resets)
+            if (settings.tabs && settings.tabs[1]) {
+                for (let tab of settings.tabs[1]) {
+                    if (tab.name === 'Client') {
+                        tab.name = 'Water';
+                        break;
+                    }
+                }
+            }
+            
             let result = gen.apply(settings, args);
             setTimeout(this.generateSettings.bind(this, settings));
             return result;
@@ -124,7 +145,7 @@ export default class Manager {
 
         let tabName =
             settings.tabs[settings.settingType][settings.tabIndex]?.name;
-        let isClientTab = tabName == 'Client';
+        let isClientTab = tabName == 'Water' || tabName == 'Client';
 
         let holder = document.getElementById('settHolder');
 

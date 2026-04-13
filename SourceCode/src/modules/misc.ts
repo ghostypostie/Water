@@ -112,7 +112,15 @@ export default class Misc extends Module {
 
         if (!ingameFPS) return;
 
+        // Performance: Use more efficient observer with throttling
+        let lastUpdate = 0;
+        const throttleMs = 100; // Update max every 100ms
+        
         this.placeboFpsObserver = new MutationObserver(() => {
+            const now = Date.now();
+            if (now - lastUpdate < throttleMs) return;
+            lastUpdate = now;
+            
             if (this.placeboFpsApplied) {
                 this.placeboFpsApplied = false;
                 return;
@@ -127,7 +135,12 @@ export default class Misc extends Module {
             if (menuHolder.style.display != 'none') menuFPS.textContent = fps + '';
         });
         
-        this.placeboFpsObserver.observe(ingameFPS, { childList: true });
+        // Performance: Only observe characterData changes, not childList
+        this.placeboFpsObserver.observe(ingameFPS, { 
+            childList: true,
+            characterData: true,
+            subtree: true 
+        });
     }
 
     renderer() {

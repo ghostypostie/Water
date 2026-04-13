@@ -37,6 +37,7 @@ export default class ClanColorizer extends Module {
         H1ND: '#FF9933',
         psvm: '#AA00FF',
         VAMP: 'linear-gradient(90deg, hsla(0, 79%, 32%, 1) 0%, hsla(0, 0%, 0%, 1) 100%)',
+        WH: '#C5E5ED',
     };
 
     private normalizeTag(tag: string): string {

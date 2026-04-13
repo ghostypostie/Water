@@ -13,6 +13,7 @@ export default class Dropdown extends ClientOption {
         description: string,
         needsRefresh?: boolean,
         needsRestart?: boolean,
+        defaultValue?: any,
         onChange?(value: any): void,
 
         options: {

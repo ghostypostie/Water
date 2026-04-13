@@ -1,4 +1,7 @@
-﻿import {
+﻿// Load environment variables from .env file
+import 'dotenv/config';
+
+import {
     app,
     autoUpdater,
     BrowserWindow,
@@ -159,11 +162,14 @@ async function startClient() {
             return;
         }
         
-        app.on('window-all-closed', (event) => event.preventDefault());
-        splashWindow.close();
-        app.removeAllListeners('window-all-closed');
-        app.on('window-all-closed', app.quit.bind(app));
-        
-        mainWindow.show();
+        // Add 2 second delay before closing splash screen
+        setTimeout(() => {
+            app.on('window-all-closed', (event) => event.preventDefault());
+            splashWindow.close();
+            app.removeAllListeners('window-all-closed');
+            app.on('window-all-closed', app.quit.bind(app));
+            
+            mainWindow.show();
+        }, 5000);
     });
 }
