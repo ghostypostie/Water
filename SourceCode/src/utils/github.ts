@@ -8,8 +8,8 @@ interface GitHubContentResponse {
 
 export async function fetchGitHubContent(path: string): Promise<GitHubContentResponse> {
     // Hardcoded credentials for renderer process (can't access process.env)
-    const token = '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';
-    const repo = 'ghostypostie/WaterStore';
+    const token = '';
+    const repo = '';
 
     if (!token || !repo) {
         console.error('[GitHub] Token or repo not configured');
