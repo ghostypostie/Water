@@ -10,11 +10,13 @@ export function getSupabaseClient() {
         let supabaseKey = '';
         
         // Try to override from process.env if available (for development)
-        if (process.env.SUPABASE_URL) {
-            supabaseUrl = process.env.SUPABASE_URL;
-        }
-        if (process.env.SUPABASE_ANON_KEY) {
-            supabaseKey = process.env.SUPABASE_ANON_KEY;
+        if (typeof process !== 'undefined' && process.env) {
+            if (process.env.SUPABASE_URL) {
+                supabaseUrl = process.env.SUPABASE_URL;
+            }
+            if (process.env.SUPABASE_ANON_KEY) {
+                supabaseKey = process.env.SUPABASE_ANON_KEY;
+            }
         }
         
         console.log('[Supabase] Initializing client with URL:', supabaseUrl);
