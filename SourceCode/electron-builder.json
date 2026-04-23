@@ -12,17 +12,28 @@
     "extraMetadata": {
         "main": "js/launch.js"
     },
+    "publish": {
+        "provider": "github",
+        "owner": "ghostypostie",
+        "repo": "Water",
+        "releaseType": "release"
+    },
     "win": {
-        "artifactName": "Water-Setup-${version}.${ext}",
+        "artifactName": "Water.${ext}",
         "target": [
             {
                 "target": "nsis",
                 "arch": "x64"
             }
-        ]
+        ],
+        "publish": {
+            "provider": "github",
+            "owner": "ghostypostie",
+            "repo": "Water"
+        }
     },
     "nsis": {
-        "artifactName": "Water-Setup-${version}.${ext}",
+        "artifactName": "Water.${ext}",
         "oneClick": true,
         "perMachine": false,
         "allowToChangeInstallationDirectory": false,

@@ -19,6 +19,28 @@ export default class RankBadgeSync extends Module {
     private rowObserver: MutationObserver | null = null;
     private centerObserver: MutationObserver | null = null;
     private isInitialized = false;
+    private activePlayerName: string = '';
+    private activePlayerBadgeSet = false;
+
+    
+    private getActivePlayerName(): string {
+        try {
+            const nameEl = document.querySelector('.menuClassPlayerName');
+            if (!nameEl) return '';
+            
+            let name = '';
+            nameEl.childNodes.forEach((node) => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    name += node.textContent;
+                }
+            });
+            
+            // Remove clan tags like [XXX] from the name
+            return name.trim().replace(/\s*\[.*?\]\s*$/g, '').trim().toLowerCase();
+        } catch (err) {
+            return '';
+        }
+    }
 
     
     private getPlayerName(nameEl: Element | null): string {
@@ -65,6 +87,19 @@ export default class RankBadgeSync extends Module {
             const name = this.getPlayerName(nameEl);
             if (!name) return;
 
+            // Check if this is the active player
+            const isActivePlayer = name === this.activePlayerName;
+
+            // If it's the active player and badge is already set, skip completely
+            if (isActivePlayer && this.activePlayerBadgeSet) {
+                return;
+            }
+
+            // If this item is marked as processed for active player, skip
+            if (isActivePlayer && item.hasAttribute('data-water-badge-locked')) {
+                return;
+            }
+
             if (!this.rankCache.has(name)) return;
             const rankSrc = this.rankCache.get(name);
             if (!rankSrc) return;
@@ -72,6 +107,12 @@ export default class RankBadgeSync extends Module {
             const existing = item.querySelector('.waterLeaderRanked img') as HTMLImageElement;
             if (existing) {
                 if (existing.src !== rankSrc) existing.src = rankSrc;
+                
+                // Mark active player badge as set and lock the item
+                if (isActivePlayer) {
+                    this.activePlayerBadgeSet = true;
+                    item.setAttribute('data-water-badge-locked', 'true');
+                }
                 return;
             }
 
@@ -88,6 +129,13 @@ export default class RankBadgeSync extends Module {
 
             badge.appendChild(img);
             item.insertBefore(badge, nameEl);
+
+            // Mark active player badge as set and lock the item
+            if (isActivePlayer) {
+                this.activePlayerBadgeSet = true;
+                item.setAttribute('data-water-badge-locked', 'true');
+                console.log('[RankBadgeSync] Active player badge locked');
+            }
         } catch (err) {
             console.log('[RankBadgeSync] injectBadgeIntoItem error:', err);
         }
@@ -167,6 +215,10 @@ export default class RankBadgeSync extends Module {
         if (this.isInitialized) return;
         this.isInitialized = true;
 
+        // Get active player name
+        this.activePlayerName = this.getActivePlayerName();
+        console.log('[RankBadgeSync] Active player:', this.activePlayerName);
+
         this.updateRankCache();
         this.injectAll();
 
@@ -201,6 +253,8 @@ export default class RankBadgeSync extends Module {
         }
         this.rankCache.clear();
         this.isInitialized = false;
+        this.activePlayerBadgeSet = false;
+        this.activePlayerName = '';
         console.log('[RankBadgeSync] Cleaned up');
     }
 

@@ -34,20 +34,36 @@ export default class Manager {
             else {
                 try {
                     let ModuleClass = require(path).default;
+                    
+                    // Skip if no default export or if it's not a constructor
+                    if (!ModuleClass || typeof ModuleClass !== 'function') continue;
 
                     let index = this.cached.findIndex(x => x instanceof ModuleClass);
                     if (index >= 0) continue;
                     
                     let module = new ModuleClass();
                     if (module instanceof Module) this.cached.push(module);
-                } catch {}
+                } catch (e) {
+                    // Suppress common expected errors from modules trying to access browser APIs in main process
+                    const errorMsg = e.toString();
+                    const isExpectedError = 
+                        errorMsg.includes('document is not defined') ||
+                        errorMsg.includes('Headers is not defined') ||
+                        errorMsg.includes('window is not defined') ||
+                        errorMsg.includes('Cannot read property \'on\' of undefined') ||
+                        errorMsg.includes('Cannot read property \'getPath\' of undefined');
+                    
+                    if (!isExpectedError) {
+                        console.error(`[ModuleManager] Failed to load module from ${path}:`, e);
+                    }
+                }
             }
         }
 
         return this.cached;
     }
 
-    load(runAt: RunAt) {
+    async load(runAt: RunAt) {
         this.injectSettings();
 
         let modules = this.listAll();
@@ -59,7 +75,9 @@ export default class Manager {
             ) !== -1
         );
         
-        for (let module of relevantModules) {
+        // Process modules in chunks to prevent blocking
+        for (let i = 0; i < relevantModules.length; i++) {
+            const module = relevantModules[i];
             module.manager = this;
 
             try {
@@ -69,7 +87,7 @@ export default class Manager {
                     `Error while initializing module ${module.name}:`,
                     initError
                 );
-                continue; // Continue loading other modules instead of returning
+                continue;
             }
 
             try {
@@ -86,10 +104,16 @@ export default class Manager {
                     `Error while running module ${module.name}:`,
                     moduleError
                 );
-                continue; // Continue loading other modules instead of returning
+                continue;
             }
 
             this.loaded.push(module);
+            
+            // Yield to event loop every 3 modules to prevent "Not Responding"
+            // Use setTimeout instead of setImmediate for browser compatibility
+            if (i % 3 === 0 && i > 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
         }
     }
 

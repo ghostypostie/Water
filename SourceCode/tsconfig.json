@@ -3,10 +3,17 @@
         "rootDir": "src",
         "outDir": "js",
         "target": "esnext",
-        "moduleResolution": "nodenext",
-        "module": "nodenext",
+        "moduleResolution": "node",
+        "module": "commonjs",
         "esModuleInterop": true,
         "resolveJsonModule": true,
-        "skipLibCheck": true
-    }
+        "skipLibCheck": true,
+        "types": ["node"]
+    },
+    "exclude": [
+        "node_modules",
+        "marketplace fix",
+        "dist",
+        "js"
+    ]
 }

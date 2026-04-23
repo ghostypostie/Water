@@ -86,7 +86,7 @@ async function handleKeyEvent(
     }
 }
 
-export default function createMainWindow(): BrowserWindow {
+export default async function createMainWindow(): Promise<BrowserWindow> {
     let { workAreaSize: displaySize } = screen.getPrimaryDisplay();
 
     let windowParams = config.get('window', {
@@ -152,7 +152,7 @@ export default function createMainWindow(): BrowserWindow {
     }
 
     let moduleManager = new ModuleManger(Context.Common);
-    moduleManager.load(RunAt.LoadStart);
+    await moduleManager.load(RunAt.LoadStart);
 
     // IPC handler for focusing window (robust implementation like ranked match)
     ipcMain.on('focus-window', () => {
@@ -182,13 +182,13 @@ export default function createMainWindow(): BrowserWindow {
         }
     );
 
-    window.once('ready-to-show', () => {
+    window.once('ready-to-show', async () => {
         let enableSplash = config.get('modules.performance.enableSplash', true);
         if (!enableSplash) {
             // Show immediately when splash is disabled
             window.show();
         }
-        moduleManager.load(RunAt.LoadEnd);
+        await moduleManager.load(RunAt.LoadEnd);
     });
 
     window.webContents.on('page-title-updated', (event) => {

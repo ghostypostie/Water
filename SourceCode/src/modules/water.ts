@@ -31,6 +31,10 @@ export default class Water extends Module {
     id = 'water';
     options = [];
     
+    constructor() {
+        super();
+    }
+    
     contexts = [
         {
             context: Context.Game,
@@ -46,8 +50,32 @@ export default class Water extends Module {
     private userCSSPath: string = '';
     private localThemesPath: string = '';
     private swapperThemesPath: string = '';
+    private retryCount: number = 0;
+    private maxRetries: number = 10;
     
     init() {
+        // Set up global water object for module access
+        if (!(window as any).water) {
+            (window as any).water = {
+                modules: []
+            };
+        }
+
+        // Add this module to the global water object
+        const waterGlobal = (window as any).water;
+        if (!waterGlobal.modules.find((m: any) => m.id === this.id)) {
+            waterGlobal.modules.push(this);
+        }
+
+        // Also add other loaded modules from manager if available
+        if (this.manager && this.manager.loaded) {
+            for (const module of this.manager.loaded) {
+                if (!waterGlobal.modules.find((m: any) => m.id === module.id)) {
+                    waterGlobal.modules.push(module);
+                }
+            }
+        }
+
         try {
             const manifestPath = join(__dirname, '../../assets/community-css/manifest.json');
             if (existsSync(manifestPath)) {
@@ -88,15 +116,480 @@ export default class Water extends Module {
         
         console.log('[Water] Userscripts path:', userscriptsPath);
         
-        const userscriptsEnabled = config.get('resourceswapper.enableUserscripts', true) as boolean;
+        const userscriptsEnabled = config.get('modules.resourceswapper.enableUserscripts', true) as boolean;
+        console.log('[Water] Config modules.resourceswapper.enableUserscripts =', userscriptsEnabled);
         if (userscriptsEnabled) {
             console.log('[Water] Initializing userscripts...');
             initializeUserscripts(userscriptsPath, config);
             console.log('[Water] Userscripts initialized, loaded:', su.userscripts.length, 'scripts');
             su.userscripts.forEach(s => console.log('[Water] Script loaded:', s.name, 'Settings:', Object.keys(s.settings).length));
+            
+            // Also load purchased scripts from GitHub (for scripts without file_content)
+            console.log('[Water] Loading purchased scripts from GitHub fallback...');
+            this.loadPurchasedScripts().catch(e => {
+                console.error('[Water] Error loading purchased scripts:', e);
+            });
+
+            // Listen for userscripts updates from cache loader
+            window.addEventListener('userscriptsUpdated', () => {
+                console.log('[Water] Received userscriptsUpdated event, refreshing UI...');
+                this.renderScripts();
+            });
         } else {
-            console.log('[Water] Userscripts disabled');
+            console.log('[Water] Userscripts disabled, clearing any existing scripts');
+            su.userscripts = []; // Clear any previously loaded scripts
         }
+    }
+
+    // Note: Early loading for scripts with file_content is handled by SupabaseScriptFetcher
+    // at startup (Context.Startup, RunAt.LoadStart). Scripts with only github_path
+    // are loaded here at game load time for backward compatibility.
+
+    async loadPurchasedScripts() {
+        try {
+            console.log('[Water] Loading purchased scripts from database (GitHub fallback)...');
+
+            // Check retry limit
+            if (this.retryCount >= this.maxRetries) {
+                console.error('[Water] Max retries reached for loading purchased scripts');
+                return;
+            }
+
+            // Try to find Store module through the manager
+            let storeModule = null;
+
+            if (this.manager && this.manager.loaded) {
+                storeModule = this.manager.loaded.find((m: any) => m.id === 'store');
+            }
+
+            // If not found through manager, try global water object
+            if (!storeModule && (window as any).water && (window as any).water.modules) {
+                storeModule = (window as any).water.modules.find((m: any) => m.id === 'store');
+            }
+
+            // If still not found, wait and retry
+            if (!storeModule) {
+                this.retryCount++;
+                console.log(`[Water] Store module not found, retrying in 3 seconds... (${this.retryCount}/${this.maxRetries})`);
+                setTimeout(() => {
+                    this.loadPurchasedScripts();
+                }, 3000);
+                return;
+            }
+
+            const supabase = (storeModule as any).supabase;
+            if (!supabase) {
+                this.retryCount++;
+                console.log(`[Water] Supabase not initialized in store module, retrying in 3 seconds... (${this.retryCount}/${this.maxRetries})`);
+                setTimeout(() => {
+                    this.loadPurchasedScripts();
+                }, 3000);
+                return;
+            }
+
+            // Reset retry count on successful connection
+            this.retryCount = 0;
+
+            const clientId = localStorage.getItem('water_client_id');
+            if (!clientId) {
+                console.log('[Water] No client ID found, skipping purchased scripts');
+                return;
+            }
+
+            // Get discord_id
+            const { data: profileData } = await supabase
+                .from('user_profiles')
+                .select('discord_id')
+                .eq('client_id', clientId)
+                .limit(1);
+
+            if (!profileData || profileData.length === 0 || !profileData[0].discord_id) {
+                console.log('[Water] No Discord linked, skipping purchased scripts');
+                return;
+            }
+
+            const discordId = profileData[0].discord_id;
+
+            // Get purchased scripts
+            const { data: purchases } = await supabase
+                .from('user_purchases')
+                .select('item_id')
+                .eq('discord_id', discordId);
+
+            if (!purchases || purchases.length === 0) {
+                console.log('[Water] No purchased items found');
+                return;
+            }
+
+            const itemIds = purchases.map((p: any) => p.item_id);
+
+            // Get script details - load ALL purchased scripts except SkyColor (which is loaded early)
+            const SKYCOLOR_ID = 'sky-color';
+            const { data: scripts } = await supabase
+                .from('premium_items')
+                .select('id, name, author, description, github_path')
+                .in('id', itemIds)
+                .eq('type', 'userscript');
+
+            if (!scripts || scripts.length === 0) {
+                console.log('[Water] No purchased scripts found');
+                return;
+            }
+
+            // Filter to only scripts that need GitHub loading (skip SkyColor - loaded early)
+            const scriptsNeedingGitHub = scripts.filter((s: any) => s.id !== SKYCOLOR_ID && s.github_path);
+
+            if (scriptsNeedingGitHub.length === 0) {
+                console.log('[Water] All purchased scripts already loaded or no GitHub path');
+                return;
+            }
+
+            console.log('[Water] Found', scriptsNeedingGitHub.length, 'scripts to load from GitHub');
+
+            // Load each script (check if enabled first)
+            for (const scriptItem of scriptsNeedingGitHub) {
+                // Use separate namespace for purchased scripts: userscripts.purchased.{name}.enabled
+                const isEnabled = config.get(`userscripts.purchased.${scriptItem.name}.enabled`, true) as boolean;
+                if (isEnabled) {
+                    console.log(`[Water] Loading enabled purchased script from GitHub: ${scriptItem.name}`);
+                    await this.loadPurchasedScript(scriptItem);
+                } else {
+                    console.log(`[Water] Skipping disabled purchased script: ${scriptItem.name}`);
+
+                    // Still add to userscripts array for UI display, but don't execute
+                    const { su } = require('./userscript-loader');
+                    su.userscripts.push({
+                        hasRan: false,
+                        strictMode: false,
+                        name: scriptItem.name,
+                        fullpath: `[PURCHASED] ${scriptItem.name}`,
+                        meta: {
+                            name: scriptItem.name,
+                            author: scriptItem.author || 'Unknown',
+                            desc: scriptItem.description || ''
+                        },
+                        unload: false,
+                        settings: {},
+                        runAt: 'document-end',
+                        priority: 0,
+                        content: '',
+                        load: function() {}
+                    });
+                }
+            }
+
+            // Refresh the Water window scripts list if it's open
+            setTimeout(() => {
+                this.renderScripts();
+            }, 500);
+
+        } catch (e) {
+            console.error('[Water] Failed to load purchased scripts:', e);
+        }
+    }
+
+    async loadPurchasedScript(scriptItem: any) {
+        try {
+            const { fetchGitHubContent } = require('../utils/github');
+
+            console.log('[Water] Loading purchased script from GitHub:', scriptItem.name);
+
+            const result = await fetchGitHubContent(scriptItem.github_path);
+            if (!result.success || !result.content) {
+                console.error('[Water] Failed to fetch script content from GitHub:', scriptItem.name);
+                return;
+            }
+
+            // Parse @run-at from script metadata
+            let runAt = 'document-end';
+            const runAtMatch = result.content.match(/\/\/\s*@run-at\s+(.+)/);
+            if (runAtMatch && runAtMatch[1].trim() === 'document-start') {
+                runAt = 'document-start';
+                console.log(`[Water] ${scriptItem.name} requires document-start (WARNING: may have timing issues via GitHub)`);
+            }
+
+            // Create a virtual userscript object
+            const { su } = require('./userscript-loader');
+
+            const waterInstance = this; // Store reference to Water instance
+
+            const virtualUserscript = {
+                hasRan: false,
+                strictMode: false,
+                name: scriptItem.name,
+                fullpath: `[PURCHASED] ${scriptItem.name}`,
+                meta: {
+                    name: scriptItem.name,
+                    author: scriptItem.author || 'Unknown',
+                    desc: scriptItem.description || '',
+                    'run-at': runAt
+                },
+                unload: false,
+                settings: {},
+                runAt: runAt,
+                priority: 0,
+                content: result.content,
+
+                load: function() {
+                    try {
+                        console.log(`[Water] Executing purchased script: ${this.name}`);
+
+                        const { strippedConsole, userscriptToggleCSS } = require('./userscript-loader');
+
+                        const context = {
+                            unload: false,
+                            settings: {},
+                            _console: strippedConsole,
+                            _css: userscriptToggleCSS
+                        };
+
+                        console.log(`[Water] Executing ${this.name} script content...`);
+                        const exported = new Function(this.content).apply(context);
+                        console.log(`[Water] '${this.name}' exported type:`, typeof exported, exported === null ? 'null' : Array.isArray(exported) ? 'array' : '');
+
+                        if (typeof exported !== 'undefined' && exported !== null) {
+                            if ('unload' in exported) this.unload = exported.unload;
+                            if ('settings' in exported) {
+                                const settingsKeys = Object.keys(exported.settings);
+                                console.log(`[Water] '${this.name}' has settings object with ${settingsKeys.length} keys:`, settingsKeys);
+                                if (settingsKeys.length > 0) {
+                                    this.settings = exported.settings;
+                                }
+                            }
+                        }
+
+                        console.log(`[Water] '${this.name}' context.settings keys:`, Object.keys(context.settings));
+                        if ((!this.settings || Object.keys(this.settings).length === 0) &&
+                            context.settings && Object.keys(context.settings).length > 0) {
+                            this.settings = context.settings;
+                            console.log(`[Water] '${this.name}' has ${Object.keys(context.settings).length} settings from context`);
+                        }
+
+                        // Fallback: parse config from script content if no settings found
+                        if (!this.settings || Object.keys(this.settings).length === 0) {
+                            const parsedSettings = waterInstance.parseConfigFromScript(this.content, this.name);
+                            if (parsedSettings && Object.keys(parsedSettings).length > 0) {
+                                this.settings = parsedSettings;
+                                console.log(`[Water] '${this.name}' has ${Object.keys(parsedSettings).length} settings from config parsing`);
+                            }
+                        }
+
+                        if (context.unload && !this.unload) this.unload = context.unload;
+
+                        console.log(`[Water] Successfully executed purchased script: ${this.name}`);
+                        this.hasRan = true;
+
+                    } catch (error) {
+                        console.error(`[Water] CRITICAL ERROR executing purchased script ${this.name}:`, error);
+                    }
+                }
+            };
+
+            virtualUserscript.load();
+
+            // Settings are already extracted by load() from exported.settings
+            // Just load saved values from config
+            console.log(`[Water] After load(), ${scriptItem.name} has ${Object.keys(virtualUserscript.settings).length} settings`);
+            this.loadSavedSettings(virtualUserscript, scriptItem.name);
+
+            // Initialize settings
+            if (virtualUserscript.settings && Object.keys(virtualUserscript.settings).length > 0) {
+                Object.keys(virtualUserscript.settings).forEach(key => {
+                    const setting = virtualUserscript.settings[key];
+                    if (setting && typeof setting.changed === 'function' && setting.value !== undefined) {
+                        try {
+                            setting.changed(setting.value);
+                        } catch (e) {
+                            console.error(`[Water] Error initializing setting ${key}:`, e);
+                        }
+                    }
+                });
+            }
+
+            su.userscripts.push(virtualUserscript);
+            console.log('[Water] Added purchased script to userscripts array:', scriptItem.name);
+
+            // Refresh UI if settings page is open
+            this.renderScripts();
+
+        } catch (e) {
+            console.error('[Water] Failed to load purchased script:', scriptItem.name, e);
+        }
+    }
+
+    private parseConfigFromScript(content: string, scriptName: string): any {
+        const settings: any = {};
+        
+        // Patterns to match: const CONFIG = {...}, const config = {...}, etc.
+        const patterns = [
+            /(?:const|let|var)\s+CONFIG\s*=\s*(\{[\s\S]*?\});?$/m,
+            /(?:const|let|var)\s+config\s*=\s*(\{[\s\S]*?\});?$/m,
+            /(?:const|let|var)\s+options\s*=\s*(\{[\s\S]*?\});?$/m,
+        ];
+        
+        for (const pattern of patterns) {
+            const match = content.match(pattern);
+            if (match) {
+                try {
+                    // Extract just the object part (group 1)
+                    const configStr = match[1];
+                    // Safely parse the config object
+                    const configObj = new Function('return ' + configStr)();
+                    
+                    // Convert to settings format
+                    for (const [key, value] of Object.entries(configObj)) {
+                        // Skip nested objects and functions
+                        if (typeof value === 'object' && value !== null && !Array.isArray(value)) continue;
+                        if (typeof value === 'function') continue;
+                        
+                        const setting: any = {
+                            title: key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'),
+                            value: value,
+                            changed: (newVal: any) => {
+                                console.log(`[Water] Setting ${key} changed to:`, newVal);
+                                // Dispatch event to update the running script's config
+                                const cleanName = scriptName.replace(/\s+/g, '');
+                                const eventName = cleanName.charAt(0).toLowerCase() + cleanName.slice(1) + 'UpdateConfig';
+                                window.dispatchEvent(new CustomEvent(eventName, {
+                                    detail: { [key]: newVal }
+                                }));
+                            }
+                        };
+                        
+                        // Determine type (must match renderSettingControl expectations)
+                        if (typeof value === 'boolean') {
+                            setting.type = 'bool';
+                        } else if (typeof value === 'number') {
+                            setting.type = 'num';
+                            const keyLower = key.toLowerCase();
+                            if (keyLower.includes('volume')) {
+                                setting.min = 0;
+                                setting.max = 1;
+                                setting.step = 0.1;
+                            } else if (keyLower === 'verticalposition') {
+                                // Percentage from top (0-100)
+                                setting.min = 0;
+                                setting.max = 100;
+                                setting.step = 1;
+                            } else if (keyLower === 'streakresettime') {
+                                // Streak reset: 0-20 seconds in ms
+                                setting.min = 0;
+                                setting.max = 20000;
+                                setting.step = 1000;
+                            } else if (keyLower === 'fadeoutdelay') {
+                                // Fade out delay: 0-10 seconds in ms
+                                setting.min = 0;
+                                setting.max = 10000;
+                                setting.step = 100;
+                            } else if (keyLower.includes('time') || keyLower.includes('delay')) {
+                                setting.min = 0;
+                                setting.max = 60000;
+                                setting.step = 100;
+                            } else if (keyLower.includes('size') || keyLower.includes('font')) {
+                                setting.min = 0;
+                                setting.max = 500;
+                                setting.step = 1;
+                            } else {
+                                setting.min = 0;
+                                setting.max = 2000;
+                                setting.step = 1;
+                            }
+                        } else if (typeof value === 'string' && value.match(/^#([0-9a-fA-F]{3}){2}$/)) {
+                            setting.type = 'color';
+                        } else {
+                            setting.type = 'text';
+                        }
+                        
+                        settings[key] = setting;
+                    }
+                    
+                    if (Object.keys(settings).length > 0) {
+                        console.log(`[Water] Parsed ${Object.keys(settings).length} settings from config in ${scriptName}`);
+                        return settings;
+                    }
+                } catch (e) {
+                    console.warn(`[Water] Failed to parse config from ${scriptName}:`, e);
+                }
+            }
+        }
+        
+        return settings;
+    }
+
+    private loadSavedSettings(userscript: any, scriptName: string) {
+        // Load saved settings from config (use purchased namespace)
+        if (!userscript.settings || Object.keys(userscript.settings).length === 0) {
+            return;
+        }
+
+        try {
+            const configKey = `userscript.purchased.${scriptName.replace(/\.js$/, '')}`;
+            const savedSettings = config.get(configKey, {});
+
+            Object.keys(savedSettings).forEach(settingKey => {
+                if (settingKey in userscript.settings
+                    && typeof userscript.settings[settingKey].changed === 'function'
+                    && typeof savedSettings[settingKey] === typeof userscript.settings[settingKey].value) {
+
+                    const savedValue = savedSettings[settingKey];
+                    const currentValue = userscript.settings[settingKey].value;
+
+                    userscript.settings[settingKey].value = savedValue;
+
+                    if (savedValue !== currentValue) {
+                        userscript.settings[settingKey].changed(savedValue);
+                    }
+                }
+            });
+        } catch (e) {
+            console.error(`[Water] Error loading saved settings for ${scriptName}:`, e);
+        }
+    }
+
+    private configToSettings(config: any, scriptName: string): any {
+        const settings: any = {};
+
+        for (const [key, value] of Object.entries(config)) {
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                continue;
+            }
+
+            let setting: any = {
+                title: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim(),
+                desc: `Configure ${key}`,
+                value: value,
+                changed: (newValue: any) => {
+                    config[key] = newValue;
+                    console.log(`[Water] ${scriptName} config.${key} = ${newValue}`);
+                }
+            };
+
+            if (typeof value === 'boolean') {
+                setting.type = 'bool';
+            } else if (typeof value === 'number') {
+                setting.type = 'num';
+                const keyLower = key.toLowerCase();
+                if (keyLower.includes('volume') || keyLower.includes('opacity') || keyLower.includes('alpha')) {
+                    setting.min = 0; setting.max = 1; setting.step = 0.01;
+                } else if (keyLower.includes('percent') || keyLower.includes('position')) {
+                    setting.min = 0; setting.max = 100; setting.step = 1;
+                } else if (keyLower.includes('time') || keyLower.includes('delay') || keyLower.includes('duration')) {
+                    setting.min = 0; setting.max = 10000; setting.step = 100;
+                } else if (keyLower.includes('size') || keyLower.includes('scale') || keyLower.includes('zoom')) {
+                    setting.min = 0.1; setting.max = 5; setting.step = 0.1;
+                } else {
+                    setting.min = Math.min(0, (value as number) - 100);
+                    setting.max = Math.max(100, (value as number) + 100);
+                    setting.step = (value as number) < 10 ? 0.1 : 1;
+                }
+            } else if (typeof value === 'string') {
+                setting.type = 'text';
+            }
+
+            settings[key] = setting;
+        }
+
+        return settings;
     }
 
     loadUserThemes() {
@@ -213,7 +706,7 @@ export default class Water extends Module {
         }
     }
 
-    renderer() {
+    renderer(ctx: Context) {
         this.injectWaterButtonCSS();
         this.injectWaterButton();
         this.injectCompWaterButton();
@@ -307,6 +800,7 @@ export default class Water extends Module {
             const menuContainer = document.getElementById('menuItemContainer');
             if (menuContainer) {
                 clearInterval(watchForContainer);
+                console.log('[Water] Starting to observe menu container');
                 observer.observe(menuContainer, { childList: true });
             }
         }, 500);
@@ -1384,18 +1878,15 @@ export default class Water extends Module {
             const list = document.getElementById('water-scripts-list');
             if (!list) return;
 
-            const userscriptsEnabled = config.get('resourceswapper.enableUserscripts', true) as boolean;
+            const userscriptsEnabled = config.get('modules.resourceswapper.enableUserscripts', true) as boolean;
+            console.log('[Water] renderScripts called, userscriptsEnabled:', userscriptsEnabled, 'su.userscripts.length:', su.userscripts.length);
 
             if (!userscriptsEnabled) {
+                console.log('[Water] Userscripts disabled, showing disabled message');
                 list.innerHTML = `
-                    <div style="background: rgba(255, 100, 100, 0.15); border: 1px solid rgba(255, 100, 100, 0.3); border-radius: 6px; padding: 15px; margin-bottom: 20px; margin-top: 15px;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                            <span class="material-icons" style="color: #ff6464; font-size: 24px;">warning</span>
-                            <span style="color: #ff6464; font-weight: 600; font-size: 15px;">Userscripts Disabled</span>
-                        </div>
-                        <div style="color: rgba(255,255,255,0.8); font-size: 13px; line-height: 1.5;">
-                            Enable them from Settings > Client > Miscellaneous > Enable Userscripts
-                        </div>
+                    <div style="background: rgba(255, 100, 100, 0.15); border: 1px solid rgba(255, 100, 100, 0.3); border-radius: 6px; padding: 20px; margin: 20px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                        <span class="material-icons" style="color: #ff6464; font-size: 28px;">warning</span>
+                        <span style="color: #ff6464; font-weight: 600; font-size: 16px;">Userscripts Disabled!</span>
                     </div>
                 `;
                 return;
@@ -1407,12 +1898,18 @@ export default class Water extends Module {
             }
 
             list.innerHTML = su.userscripts.map(script => {
-                const scriptId = script.name.replace('.js', '');
-                const isEnabled = config.get(`userscripts.${script.name}.enabled`, true) as boolean;
+                // Generate a safe script ID for DOM elements
+                const scriptId = script.name.replace(/[^a-zA-Z0-9]/g, '-').replace(/\.js$/, '');
+                
+                // Determine if this is a local or purchased script
+                const isPurchased = script.fullpath.startsWith('[PURCHASED]');
+                const namespace = isPurchased ? 'purchased' : 'local';
+                const isEnabled = config.get(`userscripts.${namespace}.${script.name}.enabled`, true) as boolean;
+                
                 const dropdownId = `water-script-settings-${scriptId}`;
 
                 const scriptName = (script.meta && script.meta.name) || script.name;
-                const scriptAuthor = (script.meta && script.meta.author) ? ` by ${script.meta.author}` : '';
+                // Author removed from display (kept in metadata only)
                 const scriptVersion = (script.meta && script.meta.version) ? ` v${script.meta.version}` : '';
                 const scriptDesc = (script.meta && script.meta.desc) || '';
 
@@ -1421,6 +1918,7 @@ export default class Water extends Module {
                 const configArrow = hasSettings ? `
                     <span class="material-icons-outlined"
                           id="arrow-${scriptId}"
+                          onclick="event.stopPropagation(); window.toggleScriptSettings('${scriptId}')"
                           style="font-size: 24px; cursor: pointer; color: rgba(255,255,255,0.6); transition: all 0.2s; margin-right: 12px;"
                           onmouseover="this.style.color='rgba(255,255,255,0.9)'"
                           onmouseout="this.style.color='rgba(255,255,255,0.6)'">
@@ -1451,7 +1949,7 @@ export default class Water extends Module {
                                  ${hasSettings ? `onclick="window.toggleScriptSettings('${scriptId}')"` : ''}>
                                 ${configArrow}
                                 <div style="display: flex; flex-direction: column;">
-                                    <span class="script-name">${scriptName}${scriptAuthor}${scriptVersion}</span>
+                                    <span class="script-name">${scriptName}${scriptVersion}</span>
                                     ${scriptDesc ? `<span style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">${scriptDesc}</span>` : ''}
                                 </div>
                             </div>
@@ -1468,18 +1966,35 @@ export default class Water extends Module {
             }).join('');
 
             (window as any).toggleWaterScript = (scriptName: string, enabled: boolean) => {
-                config.set(`userscripts.${scriptName}.enabled`, enabled);
-                console.log(`[Water] Script ${scriptName}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+                // Determine if this is a local or purchased script
+                const script = su.userscripts.find(s => s.name === scriptName);
+                const isPurchased = script && script.fullpath.startsWith('[PURCHASED]');
+                
+                // Use appropriate namespace
+                const namespace = isPurchased ? 'purchased' : 'local';
+                const configKey = `userscripts.${namespace}.${scriptName}.enabled`;
+                
+                config.set(configKey, enabled);
+                console.log(`[Water] ${isPurchased ? 'Purchased' : 'Local'} script ${scriptName}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+                console.log(`[Water] Config key: ${configKey}`);
                 console.log('[Water] Restart client to apply script changes');
             };
 
             (window as any).toggleScriptSettings = (scriptId: string) => {
                 const dropdown = document.getElementById(`water-script-settings-${scriptId}`);
                 const arrow = document.getElementById(`arrow-${scriptId}`);
+                console.log(`[Water] Toggle script settings for ${scriptId}:`, {
+                    dropdownFound: !!dropdown,
+                    arrowFound: !!arrow,
+                    dropdownDisplay: dropdown?.style.display
+                });
                 if (dropdown && arrow) {
                     const isHidden = dropdown.style.display === 'none';
                     dropdown.style.display = isHidden ? 'block' : 'none';
                     arrow.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+                    console.log(`[Water] Toggled ${scriptId}: display=${dropdown.style.display}, transform=${arrow.style.transform}`);
+                } else {
+                    console.warn(`[Water] Cannot toggle ${scriptId}: missing elements`);
                 }
             };
 
@@ -1490,23 +2005,34 @@ export default class Water extends Module {
                     return;
                 }
 
+                // ADDITION: Trim whitespace from string values
+                if (typeof value === 'string') {
+                    value = value.trim();
+                }
+
                 script.settings[settingKey].value = value;
 
                 if (typeof script.settings[settingKey].changed === 'function') {
                     try {
                         script.settings[settingKey].changed(value);
-                        console.log(`[Water] Setting updated: ${scriptName} > ${settingKey} = ${value}`);
+                        console.log(`[Water] Setting updated: ${scriptName} > ${settingKey} =`, value);
                     } catch (e) {
                         console.error('[Water] Error calling setting changed callback:', e);
                     }
                 }
 
-                // Save to config instead of JSON file
+                // Save to config with appropriate namespace
                 try {
-                    const configKey = `userscript.${scriptName.replace(/\.js$/, '')}`;
+                    // Determine if this is a local or purchased script
+                    const isPurchased = script.fullpath.startsWith('[PURCHASED]');
+                    const namespace = isPurchased ? 'purchased' : 'local';
+                    const configKey = `userscript.${namespace}.${scriptName.replace(/\.js$/, '')}`;
+                    
                     const savedSettings = config.get(configKey, {}) as any;
                     savedSettings[settingKey] = value;
                     config.set(configKey, savedSettings);
+                    
+                    console.log(`[Water] Saved to config: ${configKey}.${settingKey} = ${value}`);
                 } catch (e) {
                     console.error('[Water] Failed to save setting to config:', e);
                 }
@@ -1586,15 +2112,18 @@ export default class Water extends Module {
                 const max = setting.max !== undefined ? setting.max : 100;
                 const step = setting.step !== undefined ? setting.step : 1;
                 controlHTML = `
-                    <div style="display: flex; align-items: center; gap: 12px; min-width: 250px;">
+                    <div style="display: flex; align-items: center; gap: 10px; min-width: 280px;">
                         <input type="range" id="${settingId}"
                                min="${min}" max="${max}" step="${step}"
                                value="${setting.value}"
                                class="sliderVal" style="flex: 1;"
-                               oninput="document.getElementById('${settingId}-value').textContent=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value))">
-                        <span id="${settingId}-value" style="min-width: 45px; text-align: right; color: rgba(255,255,255,0.9); font-weight: 500; font-size: 14px;">
-                            ${setting.value}
-                        </span>
+                               oninput="document.getElementById('${settingId}-num').value=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value))">
+                        <input type="number" id="${settingId}-num"
+                               min="${min}" max="${max}" step="${step}"
+                               value="${setting.value}"
+                               style="width: 70px; padding: 6px 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: rgba(255, 255, 255, 0.9); font-size: 14px; text-align: center;"
+                               oninput="document.getElementById('${settingId}').value=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value))"
+                               onchange="let v=parseFloat(this.value); if(v<${min})v=${min}; if(v>${max})v=${max}; this.value=v; document.getElementById('${settingId}').value=v; window.updateScriptSetting('${scriptName}', '${settingKey}', v)">
                     </div>
                 `;
                 break;

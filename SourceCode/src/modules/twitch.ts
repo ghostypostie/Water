@@ -45,9 +45,14 @@ export default class TwitchChat extends Module {
     messageHistoryLimit = 50;
     badgeCache: Map<string, string> = new Map();
     channelId: string | null = null;
-    chatObserver: MutationObserver | null = null;
+    activeFilters: Set<string> = new Set();
 
     renderer() {
+        // Set up /twitch command filter FIRST
+        window.addEventListener('twitch-filter-toggle', () => {
+            this.toggleTwitchFilter();
+        });
+
         const channelName = this.config.get('channel', '');
         if (channelName && channelName.trim() !== '') {
             this.connect(channelName);
@@ -60,241 +65,109 @@ export default class TwitchChat extends Module {
             }
         });
 
-        // Add /twitch command filter
-        this.setupTwitchFilter();
-
         window.addEventListener('beforeunload', () => {
             this.cleanup();
         });
-    }
-
-    setupTwitchFilter() {
-        // Wait for chat input to be available
-        const waitForChatInput = () => {
-            const chatInput = document.getElementById('chatInput') as HTMLInputElement;
-            if (!chatInput) {
-                setTimeout(waitForChatInput, 500);
-                return;
-            }
-
-            logger.log('Setting up /twitch command filter');
-
-            // Handler function
-            const handleTwitchCommand = (e: KeyboardEvent) => {
-                const value = chatInput.value.trim();
-                logger.log(`Key pressed: ${e.key}, Input value: "${value}"`);
-                
-                if (e.key === 'Enter' && value === '/twitch') {
-                    logger.log('Twitch command detected! Intercepting...');
-                    
-                    // Stop all event propagation
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    
-                    // Clear input immediately
-                    chatInput.value = '';
-                    
-                    // Toggle filter
-                    this.toggleTwitchFilter();
-                    
-                    // Blur input to close chat
-                    setTimeout(() => {
-                        chatInput.blur();
-                    }, 10);
-                    
-                    return false;
-                }
-            };
-
-            // Try multiple event interception strategies
-            // Strategy 1: Capture phase keydown (highest priority)
-            chatInput.addEventListener('keydown', handleTwitchCommand, { capture: true });
-            
-            // Strategy 2: Bubble phase keydown (backup)
-            chatInput.addEventListener('keydown', handleTwitchCommand, { capture: false });
-            
-            // Strategy 3: Keypress event (older browsers/different timing)
-            chatInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && chatInput.value.trim() === '/twitch') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    return false;
-                }
-            }, { capture: true });
-
-            // Strategy 4: Monitor input changes and intercept before submission
-            let lastValue = '';
-            chatInput.addEventListener('input', () => {
-                lastValue = chatInput.value;
-            });
-
-            // Strategy 5: Override the form submission if chat is in a form
-            const chatForm = chatInput.closest('form');
-            if (chatForm) {
-                chatForm.addEventListener('submit', (e) => {
-                    if (chatInput.value.trim() === '/twitch') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        chatInput.value = '';
-                        this.toggleTwitchFilter();
-                        chatInput.blur();
-                        return false;
-                    }
-                }, { capture: true });
-            }
-
-            logger.log('/twitch command filter ready with multiple interception strategies');
-        };
-
-        waitForChatInput();
     }
 
     toggleTwitchFilter() {
         const chatList = document.getElementById('chatList');
         if (!chatList) {
             logger.error('chatList not found - cannot toggle filter');
-            console.error('[Water] [Twitch] chatList element not found');
             return;
         }
 
-        const allMessages = chatList.querySelectorAll('[id^="chatMsg_"]');
-        const isTwitchFilterActive = chatList.getAttribute('data-twitch-filter') === 'true';
-
-        logger.log(`Toggling Twitch filter. Current state: ${isTwitchFilterActive ? 'ON' : 'OFF'}`);
-        console.log(`[Water] [Twitch] Filter toggled. New state: ${!isTwitchFilterActive ? 'ON' : 'OFF'}`);
+        const isTwitchFilterActive = this.activeFilters.has('twitch');
 
         if (isTwitchFilterActive) {
-            // Show all messages
-            allMessages.forEach(msg => {
-                (msg as HTMLElement).style.display = '';
-            });
-            chatList.setAttribute('data-twitch-filter', 'false');
-            this.showFilterNotification('✓ Showing all chat', '#00FF00');
-            
-            // Stop observing
-            if (this.chatObserver) {
-                this.chatObserver.disconnect();
-                this.chatObserver = null;
-            }
+            // Turn off Twitch filter
+            this.activeFilters.delete('twitch');
+            this.applyFilters();
+            this.showTwitchNotification('All Messages Visible', '#00FF00', false);
         } else {
-            // Show only Twitch messages
-            const twitchCount = Array.from(allMessages).filter(msg => 
-                msg.getAttribute('data-twitch') === 'true'
-            ).length;
+            // Turn on Twitch filter
+            this.activeFilters.add('twitch');
+            this.applyFilters();
             
-            allMessages.forEach(msg => {
-                const isTwitch = msg.getAttribute('data-twitch') === 'true';
-                (msg as HTMLElement).style.display = isTwitch ? '' : 'none';
-            });
-            chatList.setAttribute('data-twitch-filter', 'true');
-            this.showFilterNotification(`✓ Twitch filter ON (${twitchCount} messages) - type /twitch to toggle`, '#9147FF');
-            
-            // Start observing for new messages
-            this.startChatObserver();
+            const twitchCount = chatList.querySelectorAll('[data-twitch="true"]').length;
+            this.showTwitchNotification(`Showing Twitch Only (${twitchCount} messages)`, '#9147FF', true);
         }
-    }
-
-    startChatObserver() {
-        const chatList = document.getElementById('chatList');
-        if (!chatList) return;
-
-        // Disconnect existing observer if any
-        if (this.chatObserver) {
-            this.chatObserver.disconnect();
-        }
-
-        // Create new observer to hide non-Twitch messages
-        this.chatObserver = new MutationObserver((mutations) => {
-            const isTwitchFilterActive = chatList.getAttribute('data-twitch-filter') === 'true';
-            if (!isTwitchFilterActive) return;
-
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    if (node instanceof HTMLElement && node.id && node.id.startsWith('chatMsg_')) {
-                        const isTwitch = node.getAttribute('data-twitch') === 'true';
-                        if (!isTwitch) {
-                            node.style.display = 'none';
-                        }
-                    }
-                });
-            });
-        });
-
-        // Start observing
-        this.chatObserver.observe(chatList, {
-            childList: true,
-            subtree: false
-        });
-    }
-
-    showFilterNotification(message: string, color: string) {
-        logger.log(`Filter notification: ${message}`);
-        console.log(`[Water] [Twitch] ${message}`);
         
-        const chatList = document.getElementById('chatList');
-        if (!chatList) {
-            logger.warn('chatList not found for notification');
-            return;
+        this.updatePlaceholder();
+    }
+
+    private applyFilters() {
+        // Remove existing Twitch filter styles
+        let twitchStyle = document.getElementById('twitch-filter-style');
+        if (!twitchStyle) {
+            twitchStyle = document.createElement('style');
+            twitchStyle.id = 'twitch-filter-style';
+            document.head.appendChild(twitchStyle);
         }
 
-        // Get next message ID
-        const existingMsgs = chatList.querySelectorAll('[id^="chatMsg_"]');
-        let maxId = -1;
-        existingMsgs.forEach(msg => {
-            const id = parseInt(msg.id.replace('chatMsg_', ''));
-            if (!isNaN(id) && id > maxId) maxId = id;
-        });
-        const newId = maxId + 1;
+        if (this.activeFilters.has('twitch')) {
+            // Hide all non-Twitch messages
+            twitchStyle.textContent = `
+                #chatList > div:not([data-twitch="true"]) { 
+                    display: none !important; 
+                }
+            `;
+        } else {
+            // Show all messages
+            twitchStyle.textContent = '';
+        }
+    }
 
-        // Create message container with more prominent styling
-        const chatMsgContainer = document.createElement('div');
-        chatMsgContainer.setAttribute('data-tab', '0');
-        chatMsgContainer.setAttribute('data-twitch', 'true'); // Mark as Twitch so it's not hidden by Twitch filter
-        chatMsgContainer.classList.add('vanillaChatMsg'); // Add vanilla class for compatibility
-        chatMsgContainer.classList.add('msg--server'); // Categorize as server message so it respects chat filters
-        chatMsgContainer.id = `chatMsg_${newId}`;
-        chatMsgContainer.style.backgroundColor = 'rgba(145, 71, 255, 0.2)';
-        chatMsgContainer.style.borderLeft = `4px solid ${color}`;
-        chatMsgContainer.style.borderRight = `4px solid ${color}`;
-        chatMsgContainer.style.padding = '8px';
-        chatMsgContainer.style.marginBottom = '4px';
-        chatMsgContainer.style.borderRadius = '4px';
-        chatMsgContainer.style.boxShadow = '0 2px 8px rgba(145, 71, 255, 0.3)';
+    private updatePlaceholder() {
+        const chatInput = document.getElementById('chatInput') as HTMLInputElement;
+        if (!chatInput) return;
 
-        // Create chat item
-        const chatItem = document.createElement('div');
-        chatItem.className = 'chatItem';
-
-        // Create message span
-        const messageSpan = document.createElement('span');
-        messageSpan.className = 'chatMsg';
-        messageSpan.style.color = color;
-        messageSpan.style.fontWeight = 'bold';
-        messageSpan.style.fontSize = '14px';
-        messageSpan.style.textShadow = '0 1px 2px rgba(0,0,0,0.5)';
-        messageSpan.textContent = `[Twitch Filter] ${message}`;
-
-        chatItem.appendChild(messageSpan);
-        chatMsgContainer.appendChild(chatItem);
-
-        chatList.appendChild(chatMsgContainer);
-        chatList.scrollTop = chatList.scrollHeight;
-
-        // Remove after 7 seconds (increased from 5)
-        setTimeout(() => {
-            if (chatMsgContainer.parentNode) {
-                chatMsgContainer.style.transition = 'opacity 0.5s';
-                chatMsgContainer.style.opacity = '0';
-                setTimeout(() => {
-                    if (chatMsgContainer.parentNode) {
-                        chatMsgContainer.remove();
-                    }
-                }, 500);
+        if (this.activeFilters.has('twitch')) {
+            chatInput.placeholder = 'Showing Twitch Only';
+        } else {
+            // Don't override if other filters might be active
+            if (chatInput.placeholder.includes('Showing')) {
+                // Another filter is active, don't change
+                return;
             }
-        }, 7000);
+            chatInput.placeholder = 'Enter Message';
+        }
+    }
+
+    private showTwitchNotification(text: string, color: string, isActive: boolean) {
+        // Remove existing notifications
+        document.querySelectorAll('.chat-filter-notif').forEach(n => n.remove());
+
+        const notif = document.createElement('div');
+        notif.className = 'chat-filter-notif';
+        notif.innerHTML = `<span style="color: ${color}; font-weight: bold;">[Twitch Filter]</span> <span style="color: rgba(255,255,255,0.85); margin-left: 6px;">${text}</span>`;
+        notif.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000000;
+            padding: 12px 24px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.9);
+            border-left: 4px solid ${color};
+            font-size: 15px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        `;
+
+        document.body.appendChild(notif);
+
+        setTimeout(() => {
+            notif.style.opacity = '0';
+            setTimeout(() => {
+                if (notif.parentNode) notif.parentNode.removeChild(notif);
+            }, 300);
+        }, 2500);
     }
 
     connect(channelName: string) {
@@ -399,7 +272,7 @@ export default class TwitchChat extends Module {
                 if (this.config.get('twitch.notifyRaids', true)) {
                     const raider = tags['msg-param-displayName'] || tags['login'] || 'Someone';
                     const viewers = tags['msg-param-viewerCount'] || '0';
-                    this.showNotification(`🚀 ${raider} is raiding with ${viewers} viewers!`, '#FF4500');
+                    this.showNotification(`${raider} is raiding with ${viewers} viewers!`, '#FF4500');
                 }
             } else if (msgId === 'ritual') {
                 const username = tags['login'] || tags['display-name'] || 'Someone';
@@ -442,6 +315,7 @@ export default class TwitchChat extends Module {
         messageSpan.className = 'chatMsg';
         messageSpan.style.color = color;
         messageSpan.style.fontWeight = 'bold';
+        messageSpan.style.fontFamily = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
         messageSpan.textContent = message;
 
         chatItem.appendChild(messageSpan);
@@ -508,10 +382,17 @@ export default class TwitchChat extends Module {
         }
         
         usernameSpan.style.fontWeight = '600';
+        usernameSpan.style.fontFamily = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
         usernameSpan.textContent = `\u200E${displayName}\u200E`;
 
         const messageSpan = document.createElement('span');
         messageSpan.className = 'chatMsg';
+        messageSpan.style.wordWrap = 'break-word';
+        messageSpan.style.wordBreak = 'break-word';
+        messageSpan.style.overflowWrap = 'break-word';
+        messageSpan.style.whiteSpace = 'pre-wrap';
+        messageSpan.style.maxWidth = '100%';
+        messageSpan.style.fontFamily = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
         
         if (this.config.get('twitch.showEmotes', true) && tags.emotes && tags.emotes !== '') {
             this.parseEmotes(messageSpan, message, tags.emotes);
@@ -595,6 +476,9 @@ export default class TwitchChat extends Module {
     }
 
     parseEmotes(container: HTMLElement, message: string, emotesData: string) {
+        // Ensure container has emoji font support
+        container.style.fontFamily = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+        
         const emoteMap: Array<{ start: number; end: number; id: string }> = [];
         
         const emoteParts = emotesData.split('/');
@@ -614,8 +498,10 @@ export default class TwitchChat extends Module {
         let lastIndex = 0;
         emoteMap.forEach(emote => {
             if (emote.start > lastIndex) {
-                const textNode = document.createTextNode(message.substring(lastIndex, emote.start));
-                container.appendChild(textNode);
+                const textSpan = document.createElement('span');
+                textSpan.style.fontFamily = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+                textSpan.textContent = message.substring(lastIndex, emote.start);
+                container.appendChild(textSpan);
             }
 
             const img = document.createElement('img');
@@ -630,8 +516,10 @@ export default class TwitchChat extends Module {
         });
 
         if (lastIndex < message.length) {
-            const textNode = document.createTextNode(message.substring(lastIndex));
-            container.appendChild(textNode);
+            const textSpan = document.createElement('span');
+            textSpan.style.fontFamily = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+            textSpan.textContent = message.substring(lastIndex);
+            container.appendChild(textSpan);
         }
     }
 
@@ -665,13 +553,6 @@ export default class TwitchChat extends Module {
     cleanup() {
         this.disconnect();
         this.reconnectAttempts = this.maxReconnectAttempts;
-        
-        // Disconnect observer
-        if (this.chatObserver) {
-            this.chatObserver.disconnect();
-            this.chatObserver = null;
-        }
-        
         logger.log('Cleanup completed');
     }
 }

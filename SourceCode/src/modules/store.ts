@@ -389,6 +389,15 @@ export default class Store extends Module {
     }
 
     showLinkSuccessNotification(discordUsername: string) {
+        // Close settings window if open
+        try {
+            if (typeof (window as any).showWindow === 'function') {
+                (window as any).showWindow(1);
+            }
+        } catch (e) {
+            console.error('[Store] Failed to close settings window:', e);
+        }
+        
         // Create immersive overlay with solid black background
         const overlay = document.createElement('div');
         overlay.style.cssText = `

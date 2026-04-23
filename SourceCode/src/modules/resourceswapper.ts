@@ -25,6 +25,7 @@ export default class ResourceSwapper extends Module {
             description:
                 'Swaps game resources with ones from the resource swapper folder.',
             id: 'enabled',
+            defaultValue: true,
         }),
         new Checkbox(this, {
             name: 'Enable Userscripts',
@@ -45,7 +46,7 @@ export default class ResourceSwapper extends Module {
         });
 
         Manager.registerBeforeRequestCallback((details, callback) => {
-            if (!this.config.get('enabled', false))
+            if (!this.config.get('enabled', true))
                 return callback({ cancel: false });
             if (!existsSync(this.path))
                 mkdirSync(this.path, { recursive: true });

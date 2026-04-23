@@ -5,7 +5,7 @@
         "height": 0,
         "x": 0,
         "y": 0,
-        "fullscreen": false
+        "fullscreen": true
     },
     "keybinds": {
         "newGame": "F4",

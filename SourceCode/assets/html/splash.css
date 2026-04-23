@@ -11,8 +11,8 @@
 }
 
 .purse {
-    height: 50px;
-    width: 50px;
+    height: 40px;
+    width: 40px;
     position: absolute;
     bottom: 20px;
     right: 20px;
@@ -22,8 +22,8 @@
 }
 
 .coin {
-    height: 50px;
-    width: 50px;
+    height: 40px;
+    width: 40px;
     position: absolute;
     transform-style: preserve-3d;
     transform-origin: 50%;
@@ -34,8 +34,8 @@
 .coin .front,
 .coin .back {
     position: absolute;
-    height: 50px;
-    width: 50px;
+    height: 40px;
+    width: 40px;
     border-radius: 50%;
     background-size: cover;
     background-color: #fe8bbb;
@@ -51,24 +51,24 @@
 }
 
 .coin .front {
-    transform: translateZ(2.5px);
+    transform: translateZ(2px);
 }
 
 .coin .back {
-    transform: translateZ(-2.5px) rotateY(180deg);
+    transform: translateZ(-2px) rotateY(180deg);
 }
 
 .coin .side {
-    width: 50px;
-    height: 50px;
-    transform: translateX(22.5px);
+    width: 40px;
+    height: 40px;
+    transform: translateX(18px);
     transform-style: preserve-3d;
     backface-visibility: hidden;
 }
 
 .coin .spoke {
-    height: 50px;
-    width: 5px;
+    height: 40px;
+    width: 4px;
     position: absolute;
     transform-style: preserve-3d;
     backface-visibility: hidden;
@@ -78,13 +78,13 @@
 .coin .spoke:after {
     content: '';
     display: block;
-    height: 9.75px;
-    width: 5px;
+    height: 7.8px;
+    width: 4px;
     position: absolute;
     transform: rotateX(78.75deg);
     background: #fe8bbb;
     background: linear-gradient(to bottom, #fe8bbb 0%, #fe8bbb 74%, #d16a92 75%, #d16a92 100%);
-    background-size: 100% 2.25px;
+    background-size: 100% 1.8px;
 }
 
 .coin .spoke:before {

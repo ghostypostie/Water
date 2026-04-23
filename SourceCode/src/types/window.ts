@@ -10,3 +10,5 @@
         loginOrRegister(): void;
     }
 }
+
+export {};

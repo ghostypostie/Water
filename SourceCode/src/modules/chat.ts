@@ -352,6 +352,9 @@ export default class Chat extends Module {
 
                 if (cmd === '/all') {
                     this.clearAllFilters();
+                } else if (cmd === '/twitch') {
+                    // Trigger Twitch filter toggle
+                    window.dispatchEvent(new CustomEvent('twitch-filter-toggle'));
                 } else {
                     const cat = this.commandMap[cmd];
                     if (cat) this.toggleCategory(cat);
@@ -430,6 +433,18 @@ export default class Chat extends Module {
                 this.clearAllFilters();
                 chatInput.value = '';
                 this.hideCommandHint();
+                return;
+            }
+
+            // Handle /twitch command - delegate to Twitch module
+            if (value === '/twitch') {
+                e.preventDefault();
+                e.stopPropagation();
+                chatInput.value = '';
+                this.hideCommandHint();
+                
+                // Trigger custom event for Twitch module to handle
+                window.dispatchEvent(new CustomEvent('twitch-filter-toggle'));
                 return;
             }
 

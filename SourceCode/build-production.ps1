@@ -22,13 +22,45 @@ Write-Host ""
 
 # Step 3: Clean node_modules
 Write-Host "[3/7] Cleaning node_modules..." -ForegroundColor Cyan
-Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue
+# Close any running electron processes first
+Write-Host "Closing any running Water Client instances..." -ForegroundColor Yellow
+Get-Process electron -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process Water -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 3
+
+# Try multiple times to remove node_modules
+$retries = 0
+$maxRetries = 3
+while ($retries -lt $maxRetries) {
+    try {
+        Remove-Item -Recurse -Force node_modules -ErrorAction Stop
+        break
+    } catch {
+        $retries++
+        if ($retries -lt $maxRetries) {
+            Write-Host "Retry $retries/$maxRetries - waiting for file locks to release..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+        } else {
+            Write-Host "WARNING: Could not fully clean node_modules, continuing anyway..." -ForegroundColor Yellow
+        }
+    }
+}
 Write-Host "node_modules cleaned ✓" -ForegroundColor Green
 Write-Host ""
 
 # Step 4: Install production dependencies only
 Write-Host "[4/7] Installing production dependencies..." -ForegroundColor Cyan
-npm install --production --silent
+npm install --omit=dev --force
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Failed to install production dependencies!" -ForegroundColor Red
+    # Restore and exit
+    if (Test-Path package.json.backup) {
+        Copy-Item package.json.backup package.json -Force
+        Remove-Item package.json.backup -Force
+    }
+    npm install
+    exit 1
+}
 $prodPackages = (Get-ChildItem node_modules -Directory | Measure-Object).Count
 Write-Host "Production dependencies installed ($prodPackages packages) ✓" -ForegroundColor Green
 Write-Host ""
@@ -75,18 +107,38 @@ Write-Host ""
 # Show results
 Write-Host "=== Production Build Complete ===" -ForegroundColor Green
 Write-Host ""
-if (Test-Path "dist/Water-Setup-*.exe") {
-    $installer = Get-Item "dist/Water-Setup-*.exe" | Select-Object -First 1
+
+# Check for Water.exe (new naming convention)
+if (Test-Path "dist/Water.exe") {
+    $installer = Get-Item "dist/Water.exe"
     $sizeMB = [math]::Round($installer.Length / 1MB, 2)
     Write-Host "Installer: $($installer.Name)" -ForegroundColor Cyan
     Write-Host "Location: $($installer.FullName)" -ForegroundColor White
     Write-Host "Size: $sizeMB MB" -ForegroundColor Yellow
     Write-Host ""
+    
+    # Check for latest.yml (required for auto-updates)
+    if (Test-Path "dist/latest.yml") {
+        Write-Host "✓ Update metadata (latest.yml) generated" -ForegroundColor Green
+    } else {
+        Write-Host "⚠ WARNING: latest.yml not found - auto-updates may not work!" -ForegroundColor Yellow
+    }
+    
     if ($sizeMB -lt 80) {
         Write-Host "✓ Size optimized! (down from 110MB)" -ForegroundColor Green
     }
-    Write-Host "✓ Ready for distribution!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "=== Ready for GitHub Release ===" -ForegroundColor Cyan
+    Write-Host "Upload these files to GitHub release:" -ForegroundColor White
+    Write-Host "  1. Water.exe" -ForegroundColor Yellow
+    Write-Host "  2. latest.yml" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Release tag format: v" -NoNewline -ForegroundColor White
+    $version = (Get-Content package.json | ConvertFrom-Json).version
+    Write-Host $version -ForegroundColor Green
+    Write-Host ""
 } else {
     Write-Host "WARNING: Installer not found in dist/" -ForegroundColor Yellow
+    Write-Host "Expected: dist/Water.exe" -ForegroundColor Yellow
 }
 Write-Host ""
