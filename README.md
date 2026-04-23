@@ -1,7 +1,7 @@
 # Fresh Water Available.
 
 This client aims for:
-- Stable behavior and performance
+- Community Based Client. Made for the Communtiy, Made by the Community.
 - Advanced customizability (settings and userscripts)
 - Constructive to the community (open source; under [AGPL-3.0](https://github.com/Water-client/Water/blob/master/LICENSE))
 
@@ -10,8 +10,9 @@ This client aims for:
 ### Water Store
 Link your Discord with Water Client through Water Bot
 - Convert your KR into Pani by sending it to "GhostyPosti"
-- Pani can be used to buy Custom CSS Themes from the Water Store
-- View your Pani balance directly from Discord using Water Bot
+- Every **1 Pani** is **1000 KR**
+- Pani can be used to buy Custom CSS Themes, Userscripts, Resources, or Features from the Water Store
+- View your Pani balance directly from Discord using Water Bot or on the Client
 
 ### Better Matchmaker (F4)
 Press **F4** to instantly join a random public game with complete customization:
@@ -51,6 +52,15 @@ Custom theme and UI toggle system:
 - **Display Mode** options (Windowed/Maximized/Fullscreen/Borderless)
 
 ## Screenshots
+
+### Water Store's Account Link
+![WaterStore-Link](screenshots/account-link.png)
+
+### Water Store's Marketplace
+![WaterStore-Marketplace](screenshots/marketplace.png)
+
+### Water Store's My Inventory
+![WaterStore-Inventory](screenshots/inventory.png)
 
 ### Rank Badges on Old Scoreboard
 ![Rank Badges on Old Scoreboard](screenshots/rank-badges.png)
