@@ -1,5 +1,6 @@
 ﻿import Module from '../module/index';
 import ClientOption from './index';
+import { showRestartToast } from '../utils/toast';
 
 export default class Dropdown extends ClientOption {
     options: {
@@ -45,6 +46,7 @@ export default class Dropdown extends ClientOption {
             let value = isNaN(parseFloat(select.value)) ? select.value : parseFloat(select.value);
             this.module.config.set(this.id, value);
             this.onChange?.(value);
+            showRestartToast();
         }
 
         container.appendChild(select);

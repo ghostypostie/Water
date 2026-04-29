@@ -1,4 +1,5 @@
 ﻿import ClientOption from './index';
+import { showRestartToast } from '../utils/toast';
 
 export default class Checkbox extends ClientOption {
     generate(): HTMLElement {
@@ -14,6 +15,7 @@ export default class Checkbox extends ClientOption {
         input.onchange = () => {
             this.module.config.set(this.id, input.checked);
             this.onChange?.(input.checked);
+            showRestartToast();
         };
         
         let span = document.createElement('span');

@@ -11,6 +11,7 @@ export default class CommonPreload extends Preload {
         super();
         window.exports = {};
         this.context = context;
+        console.log(`[CommonPreload] Creating ModuleManager with context=${context} (${Context[context]})`);
         this.moduleManager = new ModuleManager(this.context);
     }
 

@@ -6,6 +6,9 @@ import { join } from 'path';
 import { branch, commit } from '../../buildinfo.json';
 import { waitFor } from '../util';
 
+// Only run loading screen on game window (not social, editor, etc.)
+const isGameWindow = window.location.hostname === 'krunker.io' && window.location.pathname === '/';
+
 try {
     const Store = require('electron-store');
     const loaderConfig = new Store();
@@ -23,8 +26,9 @@ try {
     console.log('[Water] electron-store hideWaterLoader:', electronStoreValue);
     console.log('[Water] Final hideLoadingScreen:', hideLoadingScreen);
     console.log('[Water] customLoadingScreen:', customLoadingScreen || 'none');
+    console.log('[Water] isGameWindow:', isGameWindow);
 
-    if (!hideLoadingScreen) {
+    if (!hideLoadingScreen && isGameWindow) {
         console.log('[Water] Injecting loading screen...');
 
         const injectLoader = () => {
@@ -158,6 +162,8 @@ try {
             });
             observer.observe(document, { childList: true });
         }
+    } else if (!isGameWindow) {
+        console.log('[Water] Skipping loading screen - not on game window (pathname:', window.location.pathname + ')');
     } else {
         console.log('[Water] Loading screen hidden by config');
     }

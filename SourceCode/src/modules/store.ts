@@ -481,7 +481,13 @@ export default class Store extends Module {
             const code = this.generateRandomCode();
             const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-            // Insert code into Supabase with client_id
+            // Delete any existing codes for this client_id to prevent duplicates
+            await this.supabase
+                .from('link_codes')
+                .delete()
+                .eq('client_id', clientId);
+
+            // Insert new code into Supabase with client_id
             const { error } = await this.supabase
                 .from('link_codes')
                 .insert({

@@ -3,7 +3,7 @@ import Module from '../module';
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { shell } from 'electron';
-import { getSwapPath, getScriptsPath } from '../utils/paths';
+import { getSwapPath, getScriptsPath, copyBundledScripts } from '../utils/paths';
 import { initializeUserscripts, su } from './userscript-loader';
 import { modDownloader } from './mod-downloader';
 import config from '../config';
@@ -102,6 +102,9 @@ export default class Water extends Module {
         } catch (e) {
             console.error('[Water] Failed to create Water folders:', e);
         }
+
+        // Copy bundled scripts (like SkyColor) to user's Scripts folder
+        copyBundledScripts(userscriptsPath);
         
         this.userCSSPath = swapperCssPath;
         this.localThemesPath = swapperCssPath;
@@ -124,8 +127,8 @@ export default class Water extends Module {
             console.log('[Water] Userscripts initialized, loaded:', su.userscripts.length, 'scripts');
             su.userscripts.forEach(s => console.log('[Water] Script loaded:', s.name, 'Settings:', Object.keys(s.settings).length));
             
-            // Also load purchased scripts from GitHub (for scripts without file_content)
-            console.log('[Water] Loading purchased scripts from GitHub fallback...');
+            // Also load purchased scripts from GitHub
+            console.log('[Water] Loading purchased scripts from GitHub...');
             this.loadPurchasedScripts().catch(e => {
                 console.error('[Water] Error loading purchased scripts:', e);
             });
@@ -141,13 +144,10 @@ export default class Water extends Module {
         }
     }
 
-    // Note: Early loading for scripts with file_content is handled by SupabaseScriptFetcher
-    // at startup (Context.Startup, RunAt.LoadStart). Scripts with only github_path
-    // are loaded here at game load time for backward compatibility.
-
+    // Load purchased scripts from GitHub
     async loadPurchasedScripts() {
         try {
-            console.log('[Water] Loading purchased scripts from database (GitHub fallback)...');
+            console.log('[Water] Loading purchased scripts from GitHub...');
 
             // Check retry limit
             if (this.retryCount >= this.maxRetries) {
@@ -223,8 +223,7 @@ export default class Water extends Module {
 
             const itemIds = purchases.map((p: any) => p.item_id);
 
-            // Get script details - load ALL purchased scripts except SkyColor (which is loaded early)
-            const SKYCOLOR_ID = 'sky-color';
+            // Get script details - all purchased scripts load from GitHub
             const { data: scripts } = await supabase
                 .from('premium_items')
                 .select('id, name, author, description, github_path')
@@ -236,11 +235,11 @@ export default class Water extends Module {
                 return;
             }
 
-            // Filter to only scripts that need GitHub loading (skip SkyColor - loaded early)
-            const scriptsNeedingGitHub = scripts.filter((s: any) => s.id !== SKYCOLOR_ID && s.github_path);
+            // Filter to only scripts that have GitHub path
+            const scriptsNeedingGitHub = scripts.filter((s: any) => s.github_path);
 
             if (scriptsNeedingGitHub.length === 0) {
-                console.log('[Water] All purchased scripts already loaded or no GitHub path');
+                console.log('[Water] No scripts with GitHub path found');
                 return;
             }
 
@@ -707,6 +706,15 @@ export default class Water extends Module {
     }
 
     renderer(ctx: Context) {
+        // GLOBAL F4 INTERCEPTOR - Log all F4 keypresses to find the source
+        document.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.key === 'F4') {
+                console.log('[GLOBAL F4 INTERCEPTOR] F4 pressed!');
+                console.log('[GLOBAL F4 INTERCEPTOR] altKey:', e.altKey);
+                console.log('[GLOBAL F4 INTERCEPTOR] Stack trace:', new Error().stack);
+            }
+        }, true); // capture phase
+
         this.injectWaterButtonCSS();
         this.injectWaterButton();
         this.injectCompWaterButton();
@@ -1909,8 +1917,6 @@ export default class Water extends Module {
                 const dropdownId = `water-script-settings-${scriptId}`;
 
                 const scriptName = (script.meta && script.meta.name) || script.name;
-                // Author removed from display (kept in metadata only)
-                const scriptVersion = (script.meta && script.meta.version) ? ` v${script.meta.version}` : '';
                 const scriptDesc = (script.meta && script.meta.desc) || '';
 
                 const hasSettings = script.settings && Object.keys(script.settings).length > 0;
@@ -1949,7 +1955,7 @@ export default class Water extends Module {
                                  ${hasSettings ? `onclick="window.toggleScriptSettings('${scriptId}')"` : ''}>
                                 ${configArrow}
                                 <div style="display: flex; flex-direction: column;">
-                                    <span class="script-name">${scriptName}${scriptVersion}</span>
+                                    <span class="script-name">${scriptName}</span>
                                     ${scriptDesc ? `<span style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">${scriptDesc}</span>` : ''}
                                 </div>
                             </div>
@@ -2035,6 +2041,37 @@ export default class Water extends Module {
                     console.log(`[Water] Saved to config: ${configKey}.${settingKey} = ${value}`);
                 } catch (e) {
                     console.error('[Water] Failed to save setting to config:', e);
+                }
+
+                // Check if this setting requires restart
+                const setting = script.settings[settingKey];
+                
+                // Smart restart detection:
+                // 1. If explicitly set to true, show notification
+                // 2. If explicitly set to false, don't show
+                // 3. If undefined, use heuristics to detect
+                let needsRestart = false;
+                
+                if (setting.requiresRestart === true) {
+                    needsRestart = true;
+                } else if (setting.requiresRestart === false) {
+                    needsRestart = false;
+                } else {
+                    // Heuristic: Check if script runs at document-start or has already run
+                    // Scripts that run at document-start typically need restart
+                    if (script.runAt === 'document-start') {
+                        needsRestart = true;
+                        console.log(`[Water] Auto-detected restart needed for ${scriptName} (document-start script)`);
+                    } else if (script.hasRan) {
+                        // Script has already executed, so changes likely need restart
+                        // unless the script explicitly handles live updates
+                        needsRestart = true;
+                        console.log(`[Water] Auto-detected restart needed for ${scriptName} (script already executed)`);
+                    }
+                }
+                
+                if (needsRestart) {
+                    this.showRestartNotification();
                 }
             };
 
@@ -2190,7 +2227,9 @@ export default class Water extends Module {
 
         return `
             <div class='settName' style='margin: 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);'${tip ? ` title='${tip.replace(/'/g, "&apos;")}'` : ''}>
-                <span style="color: rgba(255,255,255,0.85); font-size: 14px;">${setting.title}</span>
+                <span style="color: rgba(255,255,255,0.85); font-size: 14px;">
+                    ${setting.title}
+                </span>
                 <span>${controlHTML}</span>
             </div>
         `;
@@ -2293,5 +2332,233 @@ export default class Water extends Module {
         } catch (e) {
             console.error('[Water] Apply UI toggles error:', e);
         }
+    }
+
+    private initToastSystem() {
+        // Only initialize once
+        if (document.getElementById('water-toast-container')) {
+            return;
+        }
+
+        // Create SVG symbols (only close icon needed)
+        const svgSymbols = `
+            <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                <symbol viewBox="0 0 384 512" id="water-close-icon">
+                    <path fill="currentColor" d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/>
+                </symbol>
+            </svg>
+        `;
+
+        // Create toast container
+        const container = document.createElement('div');
+        container.id = 'water-toast-container';
+        container.innerHTML = svgSymbols;
+
+        // Add styles
+        const style = document.createElement('style');
+        style.id = 'water-toast-styles';
+        style.textContent = `
+            @keyframes waterToastSlideIn {
+                from {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes waterToastSlideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(400px);
+                    opacity: 0;
+                }
+            }
+            
+            @keyframes waterToastDuration {
+                from { width: 0%; }
+                to { width: 100%; }
+            }
+            
+            #water-toast-container {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 999999999;
+                display: block;
+                width: auto;
+                max-width: 360px;
+                pointer-events: none;
+            }
+            
+            .water-toast {
+                display: flex;
+                align-items: center;
+                width: 100%;
+                padding: 18px 20px;
+                border-radius: 10px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+                overflow: hidden;
+                animation: waterToastSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+                pointer-events: all;
+                background: radial-gradient(circle at top left, #dc2626, #000000);
+                position: relative;
+                border: 1px solid rgba(220, 38, 38, 0.3);
+            }
+            
+            .water-toast.closing {
+                animation: waterToastSlideOut 0.3s ease-in;
+            }
+            
+            .water-toast-content {
+                flex: 1;
+                min-width: 0;
+                padding-right: 12px;
+            }
+            
+            .water-toast-content span {
+                font-size: 15px;
+                font-weight: 600;
+                color: #ffffff;
+                display: block;
+                margin-bottom: 4px;
+                text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+                word-wrap: break-word;
+            }
+            
+            .water-toast-content p {
+                font-size: 13px;
+                color: rgba(255, 255, 255, 0.9);
+                margin: 0;
+                line-height: 1.4;
+                word-wrap: break-word;
+            }
+            
+            .water-toast-close {
+                flex-shrink: 0;
+                width: 28px;
+                height: 28px;
+                padding: 4px;
+                background: rgba(255, 255, 255, 0.1);
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .water-toast-close:hover {
+                background: rgba(255, 255, 255, 0.2);
+                transform: scale(1.05);
+            }
+            
+            .water-toast-close svg {
+                display: block;
+                width: 100%;
+                height: 100%;
+                color: rgba(255, 255, 255, 0.95);
+            }
+            
+            .water-toast-duration {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                height: 3px;
+                width: 100%;
+                background-color: rgba(0, 0, 0, 0.2);
+            }
+            
+            .water-toast-duration::after {
+                display: block;
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 0%;
+                height: inherit;
+                background-color: rgba(220, 38, 38, 0.6);
+                animation: waterToastDuration 10s linear;
+            }
+        `;
+
+        document.head.appendChild(style);
+        document.body.appendChild(container);
+        
+        console.log('[Water] Toast notification system initialized');
+    }
+
+    private showToast(title: string, message: string, duration: number = 10000) {
+        // Ensure toast system is initialized
+        this.initToastSystem();
+
+        const container = document.getElementById('water-toast-container');
+        if (!container) {
+            console.error('[Water] Toast container not found');
+            return;
+        }
+
+        // Check if a toast already exists - if so, don't show another one
+        const existingToast = container.querySelector('.water-toast');
+        if (existingToast) {
+            console.log('[Water] Toast already visible, skipping duplicate');
+            return;
+        }
+
+        // Create toast element (no icon, just content and close button)
+        const toast = document.createElement('div');
+        toast.className = 'water-toast';
+        toast.innerHTML = `
+            <div class="water-toast-content">
+                <span>${title}</span>
+                <p>${message}</p>
+            </div>
+            <button class="water-toast-close">
+                <svg><use xlink:href="#water-close-icon"></use></svg>
+            </button>
+            <div class="water-toast-duration"></div>
+        `;
+
+        // Add close button handler
+        const closeBtn = toast.querySelector('.water-toast-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.closeToast(toast);
+            });
+        }
+
+        // Add to container
+        container.appendChild(toast);
+
+        // Auto-close after duration
+        setTimeout(() => {
+            this.closeToast(toast);
+        }, duration);
+
+        console.log(`[Water] Toast shown: ${title}`);
+    }
+
+    private closeToast(toast: HTMLElement) {
+        if (!toast || !toast.parentElement) return;
+        
+        toast.classList.add('closing');
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }
+
+    private showRestartNotification() {
+        // Use the toast system for restart notifications
+        this.showToast(
+            'Changes Detected',
+            'Restart Water to apply changes',
+            10000
+        );
     }
 }

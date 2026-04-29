@@ -1,5 +1,6 @@
 ﻿import Module from '../module';
 import ClientOption from './index';
+import { showRestartToast } from '../utils/toast';
 
 export default class Slider extends ClientOption {
     min = 0;
@@ -66,6 +67,7 @@ export default class Slider extends ClientOption {
 
             this.module.config.set(this.id, parsed);
             this.onChange?.(parsed);
+            showRestartToast();
         };
 
         return container;

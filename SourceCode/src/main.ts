@@ -9,6 +9,102 @@ ipcMain.on('get-user-data-path', (event) => {
     event.returnValue = app.getPath('userData');
 });
 
+// Keybind cache for instant updates
+let keybindCache: {
+    newGame: { key: string, shift: boolean, alt: boolean, ctrl: boolean } | null;
+    refresh: { key: string, shift: boolean, alt: boolean, ctrl: boolean } | null;
+    fullscreen: { key: string, shift: boolean, alt: boolean, ctrl: boolean } | null;
+    devtools: { key: string, shift: boolean, alt: boolean, ctrl: boolean } | null;
+} | null = null;
+
+// IPC handler for keybind changes - reload cache instantly
+ipcMain.on('keybinds-changed', (event, keybindData?: any) => {
+    console.log('[Main] ========================================');
+    console.log('[Main] Keybinds changed IPC received!');
+    
+    if (keybindData) {
+        // Direct update from renderer - use this data immediately
+        console.log('[Main] Received keybind data directly from renderer:', keybindData);
+        keybindCache = {
+            newGame: keybindData.newGame || { key: 'F6', shift: false, alt: false, ctrl: false },
+            refresh: keybindData.refresh || { key: 'F5', shift: false, alt: false, ctrl: false },
+            fullscreen: keybindData.fullscreen || { key: 'F11', shift: false, alt: false, ctrl: false },
+            devtools: keybindData.devtools || { key: 'F12', shift: false, alt: false, ctrl: false }
+        };
+        console.log('[Main] Cache updated directly from IPC data');
+    } else {
+        // Fallback: clear cache and reload from config
+        console.log('[Main] No keybind data provided, clearing cache and reloading from config...');
+        keybindCache = null;
+        
+        // Small delay to ensure file system sync
+        setTimeout(() => {
+            const newBinds = loadKeybinds();
+            console.log('[Main] Keybinds reloaded from config');
+        }, 100);
+    }
+    
+    console.log('[Main] Current keybinds:', {
+        newGame: keybindCache?.newGame.key,
+        refresh: keybindCache?.refresh.key,
+        fullscreen: keybindCache?.fullscreen.key,
+        devtools: keybindCache?.devtools.key
+    });
+    console.log('[Main] ========================================');
+});
+
+// Helper to parse keybind from serialized format
+function parseKeybind(serialized: number[] | null): { key: string, shift: boolean, alt: boolean, ctrl: boolean } | null {
+    if (!serialized || !Array.isArray(serialized) || serialized.length === 0) return null;
+    
+    const type = serialized[0] & 1;
+    if (type === 0) {
+        // Keyboard key
+        const shift = !!(serialized[0] & 2);
+        const alt = !!(serialized[0] & 4);
+        const ctrl = !!(serialized[0] & 8);
+        const key = String.fromCharCode(...serialized.slice(1));
+        return { key, shift, alt, ctrl };
+    }
+    return null; // Mouse buttons not supported in main process
+}
+
+// Load keybinds from config (with caching)
+function loadKeybinds() {
+    if (keybindCache) return keybindCache;
+    
+    console.log('[Main] Loading keybinds from config...');
+    
+    // Read raw values from config to see what's actually stored
+    const rawNewGame = config.get('keybinds.newGame', null);
+    const rawRefresh = config.get('keybinds.refresh', null);
+    const rawFullscreen = config.get('keybinds.fullscreen', null);
+    const rawDevtools = config.get('keybinds.devtools', null);
+    
+    console.log('[Main] Raw config values:', {
+        newGame: rawNewGame,
+        refresh: rawRefresh,
+        fullscreen: rawFullscreen,
+        devtools: rawDevtools
+    });
+    
+    keybindCache = {
+        newGame: parseKeybind(rawNewGame) || { key: 'F6', shift: false, alt: false, ctrl: false },
+        refresh: parseKeybind(rawRefresh) || { key: 'F5', shift: false, alt: false, ctrl: false },
+        fullscreen: parseKeybind(rawFullscreen) || { key: 'F11', shift: false, alt: false, ctrl: false },
+        devtools: parseKeybind(rawDevtools) || { key: 'F12', shift: false, alt: false, ctrl: false }
+    };
+    
+    console.log('[Main] Parsed keybinds:', {
+        newGame: `${keybindCache.newGame.key}`,
+        refresh: `${keybindCache.refresh.key}`,
+        fullscreen: `${keybindCache.fullscreen.key}`,
+        devtools: `${keybindCache.devtools.key}`
+    });
+    
+    return keybindCache;
+}
+
 export let window: BrowserWindow;
 const userAgent =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
@@ -37,52 +133,63 @@ async function handleKeyEvent(
 ) {
     if (input.type !== 'keyDown') return;
 
-    let binds = config.get('keybinds', {
-        newGame: 'F6',
-        refresh: 'F5',
-        fullscreen: 'F11',
-        devtools: 'F12',
-    });
+    // Load keybinds from cache (reloads if cache was cleared by IPC)
+    const binds = loadKeybinds();
 
-    binds.newGame = binds.newGame || 'F6';
-    binds.refresh = binds.refresh || 'F5';
-    binds.fullscreen = binds.fullscreen || 'F11';
-    binds.devtools = binds.devtools || 'F12';
+    const matchesKeybind = (input: Electron.Input, bind: { key: string, shift: boolean, alt: boolean, ctrl: boolean } | null): boolean => {
+        if (!bind) return false;
+        return input.key.toUpperCase() === bind.key.toUpperCase() &&
+               input.shift === bind.shift &&
+               input.alt === bind.alt &&
+               input.control === bind.ctrl;
+    };
 
-    switch (context) {
-        case Context.Game:
-            if (input.key == binds.newGame)
-                window.loadURL('https://krunker.io');
-        default:
-            if (input.key == binds.refresh) window.reload();
+    // Global keybinds (work in all contexts)
+    
+    // Fullscreen toggle
+    if (matchesKeybind(input, binds.fullscreen)) {
+        console.log('[Main] Fullscreen keybind triggered');
+        const displayMode = config.get('modules.display.mode', 'windowed') as string;
+        
+        if (displayMode === 'borderless') {
+            console.log('[Main] Borderless mode active - fullscreen disabled');
+            return;
+        }
+        
+        const isFullscreen = window.isFullScreen();
+        window.setFullScreen(!isFullscreen);
+        config.set('modules.display.mode', !isFullscreen ? 'fullscreen' : 'windowed');
+        console.log('[Main] Fullscreen:', !isFullscreen ? 'enabled' : 'disabled');
+        return;
+    }
 
-            if (input.key == binds.fullscreen) {
-                // Respect display mode setting - don't toggle if in borderless mode
-                const displayMode = config.get('modules.display.mode', 'windowed') as string;
-                if (displayMode === 'borderless') {
-                    // Borderless mode - F11 does nothing
-                    return;
-                }
-                
-                const goFullscreen = !window.isFullScreen();
-                const targetMode = goFullscreen ? 'fullscreen' : 'windowed';
-                
-                if (goFullscreen) {
-                    window.setFullScreen(true);
-                    config.set('modules.display.mode', 'fullscreen');
-                } else {
-                    window.setFullScreen(false);
-                    config.set('modules.display.mode', 'windowed');
-                }
-            }
+    // DevTools toggle
+    if (matchesKeybind(input, binds.devtools)) {
+        console.log('[Main] DevTools keybind triggered');
+        const isOpen = window.webContents.isDevToolsOpened();
+        
+        if (isOpen) {
+            window.webContents.closeDevTools();
+            console.log('[Main] DevTools closed');
+        } else {
+            window.webContents.openDevTools({ mode: 'detach' });
+            console.log('[Main] DevTools opened');
+        }
+        return;
+    }
 
-            if (input.key == binds.devtools) {
-                let devtools = window.webContents.isDevToolsOpened();
+    // Refresh page
+    if (matchesKeybind(input, binds.refresh)) {
+        console.log('[Main] Refresh keybind triggered');
+        window.reload();
+        return;
+    }
 
-                if (devtools) window.webContents.closeDevTools();
-                else window.webContents.openDevTools({ mode: 'detach' });
-            }
-            break;
+    // New Game (only in game context)
+    if (context === Context.Game && matchesKeybind(input, binds.newGame)) {
+        console.log('[Main] New Game keybind triggered');
+        window.loadURL('https://krunker.io');
+        return;
     }
 }
 

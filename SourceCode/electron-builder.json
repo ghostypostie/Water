@@ -2,7 +2,7 @@
     "appId": "com.ghosty.water",
     "productName": "Water",
     "copyright": "Copyright © 2026 Ghosty",
-    "icon": "assets/img/logo.png",
+    "icon": "assets/img/logo.ico",
     "electronVersion": "12.0.0-nightly.20201116",
     "files": [
         "js/**/*",
@@ -19,27 +19,72 @@
         "releaseType": "release"
     },
     "win": {
-        "artifactName": "Water.${ext}",
+        "artifactName": "Water.exe",
         "target": [
             {
                 "target": "nsis",
-                "arch": "x64"
+                "arch": ["x64"]
             }
         ],
-        "publish": {
-            "provider": "github",
-            "owner": "ghostypostie",
-            "repo": "Water"
-        }
+        "icon": "assets/img/logo.ico"
     },
     "nsis": {
-        "artifactName": "Water.${ext}",
+        "artifactName": "Water.exe",
         "oneClick": true,
         "perMachine": false,
         "allowToChangeInstallationDirectory": false,
         "createDesktopShortcut": true,
         "createStartMenuShortcut": true,
-        "shortcutName": "Water"
+        "shortcutName": "Water",
+        "installerIcon": "assets/img/logo.ico",
+        "uninstallerIcon": "assets/img/logo.ico"
+    },
+    "mac": {
+        "artifactName": "Water.${ext}",
+        "category": "public.app-category.games",
+        "target": [
+            {
+                "target": "dmg",
+                "arch": ["x64", "arm64"]
+            }
+        ],
+        "icon": "assets/img/logo.png",
+        "hardenedRuntime": true,
+        "gatekeeperAssess": false,
+        "entitlements": "build/entitlements.mac.plist",
+        "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+        "artifactName": "Water.dmg",
+        "contents": [
+            {
+                "x": 130,
+                "y": 220
+            },
+            {
+                "x": 410,
+                "y": 220,
+                "type": "link",
+                "path": "/Applications"
+            }
+        ]
+    },
+    "linux": {
+        "artifactName": "Water.${ext}",
+        "target": [
+            {
+                "target": "AppImage",
+                "arch": ["x64"]
+            }
+        ],
+        "category": "Game",
+        "icon": "assets/img/logo.png",
+        "synopsis": "Water Client for Krunker.io",
+        "description": "Fresh Water - Enhanced Krunker.io client"
+    },
+    "appImage": {
+        "artifactName": "Water.AppImage",
+        "license": null
     },
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,

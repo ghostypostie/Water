@@ -1,0 +1,195 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.1.3)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact: Water.exe
+          - os: macos-latest
+            platform: mac
+            artifact: Water.dmg
+          - os: ubuntu-latest
+            platform: linux
+            artifact: Water.AppImage
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Transpile TypeScript
+        run: npm run transpile
+      
+      - name: Build for ${{ matrix.platform }}
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Find built artifact
+        id: find-artifact
+        shell: bash
+        run: |
+          if [ "${{ matrix.platform }}" == "win" ]; then
+            artifact=$(find dist -name "*.exe" -type f | head -n 1)
+          elif [ "${{ matrix.platform }}" == "mac" ]; then
+            artifact=$(find dist -name "*.dmg" -type f | head -n 1)
+          else
+            artifact=$(find dist -name "*.AppImage" -type f | head -n 1)
+          fi
+          echo "artifact_path=$artifact" >> $GITHUB_OUTPUT
+          echo "Found artifact: $artifact"
+      
+      - name: Rename artifact
+        shell: bash
+        run: |
+          artifact_path="${{ steps.find-artifact.outputs.artifact_path }}"
+          artifact_dir=$(dirname "$artifact_path")
+          cp "$artifact_path" "$artifact_dir/${{ matrix.artifact }}"
+          echo "Renamed to: $artifact_dir/${{ matrix.artifact }}"
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-build
+          path: dist/${{ matrix.artifact }}
+          retention-days: 1
+      
+      - name: Upload latest.yml (Windows)
+        if: matrix.platform == 'win'
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-yml-win
+          path: dist/latest-win.yml
+          retention-days: 1
+      
+      - name: Upload latest-mac.yml (macOS)
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-yml-mac
+          path: dist/latest-mac.yml
+          retention-days: 1
+      
+      - name: Upload latest-linux.yml (Linux)
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-yml-linux
+          path: dist/latest-linux.yml
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Display structure
+        run: ls -R artifacts
+      
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create release folder structure
+        run: |
+          mkdir -p release-files/latest-yml
+          
+          # Copy main installers
+          cp artifacts/win-build/Water.exe release-files/ || true
+          cp artifacts/mac-build/Water.dmg release-files/ || true
+          cp artifacts/linux-build/Water.AppImage release-files/ || true
+          
+          # Copy latest.yml files to folder
+          cp artifacts/latest-yml-win/latest.yml release-files/latest-yml/ || true
+          cp artifacts/latest-yml-mac/latest-mac.yml release-files/latest-yml/ || true
+          cp artifacts/latest-yml-linux/latest-linux.yml release-files/latest-yml/ || true
+          
+          ls -la release-files/
+          ls -la release-files/latest-yml/
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Release v${{ steps.get_version.outputs.version }}
+          body: |
+            ## Water Client v${{ steps.get_version.outputs.version }}
+            
+            ### Downloads
+            - **Windows (x64)**: `Water.exe`
+            - **macOS (Universal)**: `Water.dmg`
+            - **Linux (x64)**: `Water.AppImage`
+            
+            ### Installation
+            
+            **Windows:**
+            1. Download `Water.exe`
+            2. Run the installer
+            3. Launch Water from desktop shortcut
+            
+            **macOS:**
+            1. Download `Water.dmg`
+            2. Open the DMG file
+            3. Drag Water to Applications folder
+            4. Launch from Applications
+            
+            **Linux:**
+            1. Download `Water.AppImage`
+            2. See README for Linux-specific setup instructions
+            
+            ### Auto-Update Files
+            The `latest-yml` folder contains update metadata files for auto-updater functionality.
+            
+            ---
+            
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/v${{ steps.get_version.outputs.version }}...HEAD
+          draft: false
+          prerelease: false
+          files: |
+            release-files/Water.exe
+            release-files/Water.dmg
+            release-files/Water.AppImage
+            release-files/latest-yml/latest.yml
+            release-files/latest-yml/latest-mac.yml
+            release-files/latest-yml/latest-linux.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

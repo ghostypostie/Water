@@ -24,7 +24,9 @@ interface UserscriptSetting {
     min?: number;
     max?: number;
     step?: number;
+    opts?: string[];
     changed?: (newValue: any) => void;
+    requiresRestart?: boolean;
 }
 
 interface UserscriptSettings {
@@ -373,66 +375,6 @@ export function initializeUserscripts(userscriptsPath: string, config: any) {
         su.userscripts = [];
     }
 
-    // Function to load premium scripts from cache
-    const loadPremiumScriptsFromCache = () => {
-        try {
-            const premiumCache = (window as any).__PREMIUM_SCRIPTS_CACHE__;
-            if (!premiumCache || !Array.isArray(premiumCache) || premiumCache.length === 0) {
-                return;
-            }
-
-            // Check if already loaded to avoid duplicates
-            const loadedNames = new Set(su.userscripts.map(u => u.name));
-            const newScripts = premiumCache.filter(s => !loadedNames.has(s.name));
-
-            if (newScripts.length === 0) {
-                return;
-            }
-
-            strippedConsole.log(`[Water] Loading ${newScripts.length} premium scripts from memory cache`);
-
-            for (const scriptData of newScripts) {
-                try {
-                    // Skip scripts without content
-                    if (!scriptData.file_content) {
-                        strippedConsole.warn(`[Water] Skipping premium script ${scriptData.name}: no file_content`);
-                        continue;
-                    }
-
-                    // Create Userscript instance with content from memory
-                    // Constructor parses metadata including settings from the content
-                    const premiumScript = new Userscript({
-                        name: scriptData.name,
-                        fullpath: `[PURCHASED] ${scriptData.name}`,
-                        content: scriptData.file_content
-                    });
-
-                    // Enhance metadata from Supabase (preserve parsed settings)
-                    if (premiumScript.meta) {
-                        premiumScript.meta.name = scriptData.name;
-                        premiumScript.meta.author = scriptData.author || premiumScript.meta.author || 'Unknown';
-                        premiumScript.meta.desc = scriptData.description || premiumScript.meta.desc || '';
-                        premiumScript.meta['run-at'] = premiumScript.runAt;
-                    }
-
-                    su.userscripts.push(premiumScript);
-                    strippedConsole.log(`[Water] Loaded premium script: ${scriptData.name} (runAt: ${premiumScript.runAt})`);
-                } catch (e) {
-                    strippedConsole.error(`[Water] Failed to load premium script ${scriptData.name}:`, e);
-                }
-            }
-
-            // Re-sort after adding premium scripts
-            su.userscripts = su.userscripts.sort((a, b) => b.priority - a.priority);
-        } catch (err) {
-            strippedConsole.error('[Water] Failed to load premium scripts from cache:', err);
-        }
-    };
-
-    // Load immediately if cache already exists
-    strippedConsole.log('[Water] Checking for premium scripts cache...');
-    loadPremiumScriptsFromCache();
-
     // Function to execute a single userscript
     const executeScript = (u: Userscript) => {
         strippedConsole.log(`[Water] Processing script: ${u.name}, runAt: ${u.runAt}`);
@@ -478,68 +420,4 @@ export function initializeUserscripts(userscriptsPath: string, config: any) {
 
     // Execute initially loaded scripts
     su.userscripts.forEach(executeScript);
-
-    // Also listen for event when cache is populated (handles race condition)
-    window.addEventListener('premiumScriptsReady', () => {
-        strippedConsole.log('[Water] Received premiumScriptsReady event, loading from cache...');
-        const beforeCount = su.userscripts.length;
-        loadPremiumScriptsFromCache();
-        const afterCount = su.userscripts.length;
-
-        // Execute any newly added scripts
-        if (afterCount > beforeCount) {
-            strippedConsole.log(`[Water] ${afterCount - beforeCount} new scripts added, executing...`);
-            for (let i = beforeCount; i < afterCount; i++) {
-                executeScript(su.userscripts[i]);
-            }
-            // Dispatch event to refresh UI
-            window.dispatchEvent(new CustomEvent('userscriptsUpdated'));
-        }
-    });
-    
-    // RACE CONDITION FIX: Check if event already fired before we set up listener
-    if ((window as any).__PREMIUM_SCRIPTS_EVENT_FIRED__) {
-        strippedConsole.log('[Water] premiumScriptsReady already fired (late listener), loading now...');
-        const beforeCount = su.userscripts.length;
-        loadPremiumScriptsFromCache();
-        const afterCount = su.userscripts.length;
-        if (afterCount > beforeCount) {
-            strippedConsole.log(`[Water] ${afterCount - beforeCount} scripts loaded from late check`);
-            for (let i = beforeCount; i < afterCount; i++) {
-                executeScript(su.userscripts[i]);
-            }
-            window.dispatchEvent(new CustomEvent('userscriptsUpdated'));
-        }
-    }
-    
-    // RELIABILITY FIX: Periodic check for SkyColor (in case both initial attempts failed)
-    let skyColorCheckAttempts = 0;
-    const maxSkyColorChecks = 5;
-    const checkInterval = setInterval(() => {
-        skyColorCheckAttempts++;
-        
-        // Check if SkyColor is in cache but not loaded
-        const cache = (window as any).__PREMIUM_SCRIPTS_CACHE__;
-        const hasSkyColorInCache = cache && cache.some((s: any) => s.id === 'sky-color' || s.name?.toLowerCase().includes('sky'));
-        const hasSkyColorLoaded = su.userscripts.some(u => u.name.toLowerCase().includes('sky') || u.fullpath.includes('sky-color'));
-        
-        if (hasSkyColorInCache && !hasSkyColorLoaded) {
-            strippedConsole.log('[Water] SkyColor found in cache but not loaded, loading now...');
-            const beforeCount = su.userscripts.length;
-            loadPremiumScriptsFromCache();
-            const afterCount = su.userscripts.length;
-            if (afterCount > beforeCount) {
-                for (let i = beforeCount; i < afterCount; i++) {
-                    executeScript(su.userscripts[i]);
-                }
-                window.dispatchEvent(new CustomEvent('userscriptsUpdated'));
-                clearInterval(checkInterval);
-            }
-        }
-        
-        // Stop checking after max attempts
-        if (skyColorCheckAttempts >= maxSkyColorChecks) {
-            clearInterval(checkInterval);
-        }
-    }, 1000); // Check every second for up to 5 seconds
 }

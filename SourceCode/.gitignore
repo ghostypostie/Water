@@ -8,3 +8,6 @@ src/modules/_*.ts
 # Environment variables (contains sensitive credentials)
 .env
 .env.local
+
+# Private bundled scripts folder (not uploaded to GitHub)
+assets/scripts/

@@ -141,7 +141,7 @@ export default class QuickPlay extends Module {
         new Checkbox(this, {
             id: 'quickplay.enabled',
             name: 'Enable Quick Play',
-            description: 'Automatically find and join best game based on filters when pressing F4',
+            description: 'Automatically find and join best game based on filters when pressing the Quick Play keybind',
             defaultValue: false,
             needsRestart: true
         }),
@@ -234,14 +234,7 @@ export default class QuickPlay extends Module {
         this.injectStyles();
 
         const enabled = config.get('quickplay.enabled', false) as boolean;
-        if (!enabled) {
-            console.log('[Water] Quick Play disabled');
-            return;
-        }
-
-        this.setupF6Keybind();
-
-        console.log('[Water] Quick Play enabled');
+        console.log('[Water] Quick Play status:', enabled ? 'enabled' : 'disabled');
     }
 
     injectStyles() {
@@ -287,16 +280,19 @@ export default class QuickPlay extends Module {
         document.head.appendChild(style);
     }
 
-    setupF6Keybind() {
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'F4') {
-                e.preventDefault();
-                this.findAndJoinGame();
-            }
-        });
-    }
 
-    async findAndJoinGame() {
+    public async findAndJoinGame() {
+        // Log who called this function
+        console.log('[Water] Quick Play: findAndJoinGame called from:', new Error().stack);
+
+        // Final safeguard - check if Quick Play is enabled
+        const enabled = config.get('quickplay.enabled', false) as boolean;
+        console.log('[Water] Quick Play: enabled check result=', enabled);
+        if (!enabled) {
+            console.log('[Water] Quick Play: BLOCKED - feature disabled');
+            return;
+        }
+
         try {
             console.log('[Water] Quick Play: Searching for game...');
 

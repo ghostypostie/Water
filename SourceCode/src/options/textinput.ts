@@ -1,5 +1,6 @@
 ﻿import Module from '../module/index';
 import ClientOption from './index';
+import { showRestartToast } from '../utils/toast';
 
 export default class TextInput extends ClientOption {
     label: string;
@@ -29,6 +30,13 @@ export default class TextInput extends ClientOption {
         input.placeholder = this.label;
         input.value = this.module.config.get(this.id, this.defaultValue || '') as string;
         input.type = this.type || 'text';
+        
+        // Apply additional styles for password fields
+        if (this.type === 'password') {
+            input.style.fontFamily = 'monospace';
+            input.style.letterSpacing = '2px';
+        }
+        
         input.onchange = () => {
             let value = (
                 this.type === 'number' ?
@@ -38,6 +46,7 @@ export default class TextInput extends ClientOption {
 
             this.module.config.set(this.id, value);
             if(this.onChange) this.onChange(value);
+            showRestartToast();
         };
 
         container.append(input);

@@ -9,11 +9,5 @@
         "resolveJsonModule": true,
         "skipLibCheck": true,
         "types": ["node"]
-    },
-    "exclude": [
-        "node_modules",
-        "marketplace fix",
-        "dist",
-        "js"
-    ]
+    }
 }

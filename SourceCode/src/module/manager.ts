@@ -32,8 +32,14 @@ export default class Manager {
 
             if (stat.isDirectory()) this.cached.push(...this.listAll(path + '/'));
             else {
+                console.log(`[Manager] Loading module file: ${file}`);
+                
                 try {
-                    let ModuleClass = require(path).default;
+                    let required = require(path);
+                    let imported = required.default ? required.default : required;
+                    console.log(`[Manager] Imported from ${file}:`, imported?.name || 'unnamed');
+                    
+                    let ModuleClass = imported;
                     
                     // Skip if no default export or if it's not a constructor
                     if (!ModuleClass || typeof ModuleClass !== 'function') continue;
@@ -43,15 +49,20 @@ export default class Manager {
                     
                     let module = new ModuleClass();
                     if (module instanceof Module) this.cached.push(module);
-                } catch (e) {
+                } catch (e: any) {
                     // Suppress common expected errors from modules trying to access browser APIs in main process
-                    const errorMsg = e.toString();
+                    const errorMsg = e?.toString() || '';
+                    const errorStack = e?.stack || '';
                     const isExpectedError = 
                         errorMsg.includes('document is not defined') ||
                         errorMsg.includes('Headers is not defined') ||
                         errorMsg.includes('window is not defined') ||
                         errorMsg.includes('Cannot read property \'on\' of undefined') ||
-                        errorMsg.includes('Cannot read property \'getPath\' of undefined');
+                        errorMsg.includes('Cannot read properties of undefined (reading \'on\')') ||
+                        errorMsg.includes('Cannot read property \'getPath\' of undefined') ||
+                        errorStack.includes('ipcMain') ||
+                        errorStack.includes('main.js') ||
+                        errorStack.includes('main.ts');
                     
                     if (!isExpectedError) {
                         console.error(`[ModuleManager] Failed to load module from ${path}:`, e);
@@ -69,11 +80,16 @@ export default class Manager {
         let modules = this.listAll();
         
         // Performance: Filter modules before iteration
-        const relevantModules = modules.filter(module => 
-            module.contexts.findIndex(
+        console.log(`[Manager] Filtering ${modules.length} modules for context=${this.context} runAt=${runAt}`);
+        const relevantModules = modules.filter(module => {
+            const matches = module.contexts.findIndex(
                 (ctx) => ctx.context == this.context && ctx.runAt == runAt
-            ) !== -1
-        );
+            ) !== -1;
+            if (module.name === 'Keybind Changer') {
+                console.log(`[Manager] KeybindChanger contexts:`, module.contexts, 'matches:', matches);
+            }
+            return matches;
+        });
         
         // Process modules in chunks to prevent blocking
         for (let i = 0; i < relevantModules.length; i++) {
@@ -94,9 +110,11 @@ export default class Manager {
                 if (
                     this.context == Context.Startup ||
                     this.context == Context.Common
-                )
+                ) {
+                    console.log(`[Manager] Running main() for ${module.name}`);
                     module.main?.();
-                else {
+                } else {
+                    console.log(`[Manager] Running renderer() for ${module.name} in context ${this.context}`);
                     module.renderer?.(this.context);
                 }
             } catch (moduleError) {
