@@ -5,6 +5,8 @@ import { fetchGitHubContent } from '../utils/github';
 import { app } from 'electron';
 import { join } from 'path';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'fs';
+import { errorManager } from './userscript-error-manager';
+import { hotReload } from './userscript-hot-reload';
 
 interface PremiumScriptMeta {
     id: string;
@@ -39,6 +41,14 @@ export default class PremiumScripts extends Module {
 
         // Load purchased scripts and create toggles
         this.loadPurchasedScripts();
+        
+        // Start hot reload for premium scripts cache
+        const config = require('../config').default;
+        const hotReloadEnabled = config.get('modules.resourceswapper.hotReloadUserscripts', true);
+        if (hotReloadEnabled) {
+            console.log('[Premium Scripts] Starting hot reload for premium scripts cache...');
+            hotReload.start(this.scriptsPath, 'premium');
+        }
     }
 
     private loadPurchasedScripts() {
@@ -137,6 +147,7 @@ export default class PremiumScripts extends Module {
             console.log(`[Premium Scripts] ${script.name} enabled`);
         } catch (e) {
             console.error(`[Premium Scripts] Failed to enable ${script.name}:`, e);
+            errorManager.logError(script.name, 'premium', e as Error);
         }
     }
 

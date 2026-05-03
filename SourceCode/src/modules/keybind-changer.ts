@@ -32,10 +32,6 @@ const CLIENT_KEYBINDS: WaterKeybind[] = [
 
 const WATER_KEYBINDS: WaterKeybind[] = [
     { id: 'water.quickplay',  name: 'Quick Play',       default: 'F4',  section: 'Water Features' },
-    { id: 'water.altmanager', name: 'Alt Manager',      section: 'Water Features' },
-    { id: 'water.compmode',   name: 'Competitive Mode', section: 'Water Features' },
-    { id: 'water.hideui',     name: 'Hide UI',          section: 'Water Features' },
-    { id: 'water.screenshot', name: 'Screenshot',       section: 'Water Features' },
 ];
 
 export default class KeybindChanger extends Module {
@@ -861,66 +857,9 @@ export default class KeybindChanger extends Module {
                     console.log('[KeybindChanger] QuickPlay module not found');
                 }
                 break;
-            case 'water.altmanager':
-                console.log('[KeybindChanger] Toggling Alt Manager');
-                const el = document.getElementById('altManager');
-                if (el) {
-                    el.style.display = el.style.display === 'block' ? 'none' : 'block';
-                    console.log('[KeybindChanger] Alt Manager toggled:', el.style.display);
-                } else {
-                    console.log('[KeybindChanger] Alt Manager element not found');
-                }
-                break;
-            case 'water.compmode':
-                console.log('[KeybindChanger] Toggling Competitive Mode');
-                const compBtn = document.getElementById('waterCompBtn') as HTMLElement;
-                if (compBtn) {
-                    compBtn.click();
-                    console.log('[KeybindChanger] Competitive Mode toggled');
-                } else {
-                    console.log('[KeybindChanger] Competitive Mode button not found');
-                }
-                break;
-            case 'water.hideui':
-                console.log('[KeybindChanger] Toggling UI visibility');
-                this.toggleUI();
-                break;
-            case 'water.screenshot':
-                console.log('[KeybindChanger] Taking screenshot');
-                this.takeScreenshot();
-                break;
             default:
                 console.log('[KeybindChanger] Unknown keybind:', kbId);
         }
-    }
-
-    private toggleUI() {
-        const selectors = [
-            '#menuWindow', '#endUI', '#spectButton', '#chatList',
-            '#topRight', '#topLeftHolder', '#bottomLeftHolder',
-            '#bottomRight', '#weapHolder', '#perkHolder'
-        ];
-        const first = document.querySelector(selectors[0]) as HTMLElement | null;
-        const hide = first !== null && first.style.display !== 'none';
-
-        selectors.forEach(s => {
-            const el = document.querySelector(s) as HTMLElement | null;
-            if (el) el.style.display = hide ? 'none' : '';
-        });
-    }
-
-    private takeScreenshot() {
-        const selectors = '#menuWindow,#endUI,#spectButton,#chatList,#topRight,#topLeftHolder,#bottomLeftHolder,#bottomRight,#weapHolder,#perkHolder';
-        const els = document.querySelectorAll(selectors);
-
-        els.forEach(el => {
-            (el as HTMLElement).style.display = 'none';
-        });
-        setTimeout(() => {
-            els.forEach(el => {
-                (el as HTMLElement).style.display = '';
-            });
-        }, 200);
     }
 
     private showKeybindChangeToast(kbId: string, keyObj: KeyObj | null, action: 'change' | 'reset' | 'unbound' = 'change') {

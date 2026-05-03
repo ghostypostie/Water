@@ -7,6 +7,10 @@ import { getSwapPath, getScriptsPath, copyBundledScripts } from '../utils/paths'
 import { initializeUserscripts, su } from './userscript-loader';
 import { modDownloader } from './mod-downloader';
 import config from '../config';
+import { errorManager } from './userscript-error-manager';
+import { performanceMonitor } from './userscript-performance-monitor';
+import { dependencyManager } from './userscript-dependency-manager';
+import { hotReload } from './userscript-hot-reload';
 
 interface Theme {
     id: string;
@@ -123,9 +127,14 @@ export default class Water extends Module {
         console.log('[Water] Config modules.resourceswapper.enableUserscripts =', userscriptsEnabled);
         if (userscriptsEnabled) {
             console.log('[Water] Initializing userscripts...');
-            initializeUserscripts(userscriptsPath, config);
-            console.log('[Water] Userscripts initialized, loaded:', su.userscripts.length, 'scripts');
-            su.userscripts.forEach(s => console.log('[Water] Script loaded:', s.name, 'Settings:', Object.keys(s.settings).length));
+            
+            // Initialize userscripts asynchronously (don't block)
+            initializeUserscripts(userscriptsPath, config).then(() => {
+                console.log('[Water] Userscripts initialized, loaded:', su.userscripts.length, 'scripts');
+                su.userscripts.forEach(s => console.log('[Water] Script loaded:', s.name, 'Settings:', Object.keys(s.settings).length));
+            }).catch(e => {
+                console.error('[Water] Error initializing userscripts:', e);
+            });
             
             // Also load purchased scripts from GitHub
             console.log('[Water] Loading purchased scripts from GitHub...');
@@ -137,6 +146,37 @@ export default class Water extends Module {
             window.addEventListener('userscriptsUpdated', () => {
                 console.log('[Water] Received userscriptsUpdated event, refreshing UI...');
                 this.renderScripts();
+            });
+            
+            // Listen for purchased script reload requests
+            window.addEventListener('reloadPurchasedScript', async (e: any) => {
+                const { scriptName } = e.detail;
+                console.log('[Water] Received reload request for purchased script:', scriptName);
+                
+                // Find the script item in Supabase to get its details
+                try {
+                    const storeModule = this.manager?.loaded.find((m: any) => m.id === 'store');
+                    if (!storeModule) return;
+                    
+                    const supabase = (storeModule as any).supabase;
+                    if (!supabase) return;
+                    
+                    // Get script details
+                    const { data: scripts } = await supabase
+                        .from('premium_items')
+                        .select('id, name, author, description, github_path')
+                        .eq('name', scriptName)
+                        .eq('type', 'userscript')
+                        .limit(1);
+                    
+                    if (scripts && scripts.length > 0) {
+                        await this.loadPurchasedScript(scripts[0]);
+                        this.renderScripts();
+                        console.log('[Water] Successfully reloaded purchased script:', scriptName);
+                    }
+                } catch (err) {
+                    console.error('[Water] Failed to reload purchased script:', err);
+                }
             });
         } else {
             console.log('[Water] Userscripts disabled, clearing any existing scripts');
@@ -299,114 +339,25 @@ export default class Water extends Module {
                 return;
             }
 
-            // Parse @run-at from script metadata
-            let runAt = 'document-end';
-            const runAtMatch = result.content.match(/\/\/\s*@run-at\s+(.+)/);
-            if (runAtMatch && runAtMatch[1].trim() === 'document-start') {
-                runAt = 'document-start';
-                console.log(`[Water] ${scriptItem.name} requires document-start (WARNING: may have timing issues via GitHub)`);
-            }
+            // Use the Userscript class exactly like local scripts
+            const { Userscript, su } = require('./userscript-loader');
 
-            // Create a virtual userscript object
-            const { su } = require('./userscript-loader');
-
-            const waterInstance = this; // Store reference to Water instance
-
-            const virtualUserscript = {
-                hasRan: false,
-                strictMode: false,
+            // Create userscript with content from GitHub (same as local, just different source)
+            const userscript = new Userscript({
                 name: scriptItem.name,
                 fullpath: `[PURCHASED] ${scriptItem.name}`,
-                meta: {
-                    name: scriptItem.name,
-                    author: scriptItem.author || 'Unknown',
-                    desc: scriptItem.description || '',
-                    'run-at': runAt
-                },
-                unload: false,
-                settings: {},
-                runAt: runAt,
-                priority: 0,
-                content: result.content,
+                content: result.content
+            });
 
-                load: function() {
-                    try {
-                        console.log(`[Water] Executing purchased script: ${this.name}`);
+            // Mark as premium for config namespace
+            userscript.scriptType = 'premium';
 
-                        const { strippedConsole, userscriptToggleCSS } = require('./userscript-loader');
+            // Execute the script (this handles everything: IIFE detection, settings extraction, etc.)
+            await userscript.load();
 
-                        const context = {
-                            unload: false,
-                            settings: {},
-                            _console: strippedConsole,
-                            _css: userscriptToggleCSS
-                        };
-
-                        console.log(`[Water] Executing ${this.name} script content...`);
-                        const exported = new Function(this.content).apply(context);
-                        console.log(`[Water] '${this.name}' exported type:`, typeof exported, exported === null ? 'null' : Array.isArray(exported) ? 'array' : '');
-
-                        if (typeof exported !== 'undefined' && exported !== null) {
-                            if ('unload' in exported) this.unload = exported.unload;
-                            if ('settings' in exported) {
-                                const settingsKeys = Object.keys(exported.settings);
-                                console.log(`[Water] '${this.name}' has settings object with ${settingsKeys.length} keys:`, settingsKeys);
-                                if (settingsKeys.length > 0) {
-                                    this.settings = exported.settings;
-                                }
-                            }
-                        }
-
-                        console.log(`[Water] '${this.name}' context.settings keys:`, Object.keys(context.settings));
-                        if ((!this.settings || Object.keys(this.settings).length === 0) &&
-                            context.settings && Object.keys(context.settings).length > 0) {
-                            this.settings = context.settings;
-                            console.log(`[Water] '${this.name}' has ${Object.keys(context.settings).length} settings from context`);
-                        }
-
-                        // Fallback: parse config from script content if no settings found
-                        if (!this.settings || Object.keys(this.settings).length === 0) {
-                            const parsedSettings = waterInstance.parseConfigFromScript(this.content, this.name);
-                            if (parsedSettings && Object.keys(parsedSettings).length > 0) {
-                                this.settings = parsedSettings;
-                                console.log(`[Water] '${this.name}' has ${Object.keys(parsedSettings).length} settings from config parsing`);
-                            }
-                        }
-
-                        if (context.unload && !this.unload) this.unload = context.unload;
-
-                        console.log(`[Water] Successfully executed purchased script: ${this.name}`);
-                        this.hasRan = true;
-
-                    } catch (error) {
-                        console.error(`[Water] CRITICAL ERROR executing purchased script ${this.name}:`, error);
-                    }
-                }
-            };
-
-            virtualUserscript.load();
-
-            // Settings are already extracted by load() from exported.settings
-            // Just load saved values from config
-            console.log(`[Water] After load(), ${scriptItem.name} has ${Object.keys(virtualUserscript.settings).length} settings`);
-            this.loadSavedSettings(virtualUserscript, scriptItem.name);
-
-            // Initialize settings
-            if (virtualUserscript.settings && Object.keys(virtualUserscript.settings).length > 0) {
-                Object.keys(virtualUserscript.settings).forEach(key => {
-                    const setting = virtualUserscript.settings[key];
-                    if (setting && typeof setting.changed === 'function' && setting.value !== undefined) {
-                        try {
-                            setting.changed(setting.value);
-                        } catch (e) {
-                            console.error(`[Water] Error initializing setting ${key}:`, e);
-                        }
-                    }
-                });
-            }
-
-            su.userscripts.push(virtualUserscript);
-            console.log('[Water] Added purchased script to userscripts array:', scriptItem.name);
+            // Add to array
+            su.userscripts.push(userscript);
+            console.log('[Water] Added purchased script to userscripts array:', scriptItem.name, 'Settings:', Object.keys(userscript.settings).length);
 
             // Refresh UI if settings page is open
             this.renderScripts();
@@ -1313,6 +1264,54 @@ export default class Water extends Module {
                 border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
             }
+            .water-script-card {
+                transition: all 0.2s ease;
+            }
+            .water-script-card:hover {
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            }
+            #water-script-search:focus {
+                border-color: rgba(255, 105, 180, 0.5) !important;
+                box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.1);
+            }
+            .water-setting-row {
+                transition: all 0.15s ease;
+            }
+            .water-setting-row:last-child {
+                margin-bottom: 0 !important;
+            }
+            .water-setting-row input[type="range"] {
+                -webkit-appearance: none;
+                appearance: none;
+                height: 5px;
+                border-radius: 3px;
+                outline: none;
+                cursor: pointer;
+            }
+            .water-setting-row input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 14px;
+                height: 14px;
+                border-radius: 50%;
+                background: #ff69b4;
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                cursor: pointer;
+                box-shadow: 0 0 6px rgba(255, 105, 180, 0.4);
+                transition: transform 0.15s ease, box-shadow 0.15s ease;
+            }
+            .water-setting-row input[type="range"]::-webkit-slider-thumb:hover {
+                transform: scale(1.2);
+                box-shadow: 0 0 10px rgba(255, 105, 180, 0.6);
+            }
+            .water-setting-row input[type="range"]:active::-webkit-slider-thumb {
+                transform: scale(1.1);
+                background: #ff85c8;
+            }
+            .water-setting-row select option {
+                background: #1a1a2e;
+                color: #fff;
+            }
         `;
     }
 
@@ -1355,8 +1354,6 @@ export default class Water extends Module {
             }
 
             if (localList) {
-                let html = '';
-
                 // Combine all local theme arrays (they all point to the same path)
                 const allLocalThemes = [
                     ...this.userThemes,
@@ -1369,13 +1366,23 @@ export default class Water extends Module {
                     index === self.findIndex(t => t.filename === theme.filename)
                 );
 
+                const searchHTML = `
+                    <div style="margin-bottom: 12px;">
+                        <input type="text" id="water-local-themes-search" placeholder="Search local themes..." oninput="window.waterFilterLocalThemes(this.value)"
+                               style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: rgba(255,255,255,0.9); font-size: 13px; outline: none; transition: border-color 0.2s; margin-top: 8px;"
+                               onfocus="this.style.borderColor='rgba(255,105,180,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" />
+                    </div>
+                `;
+
+                let itemsHTML = '';
                 if (uniqueThemes.length > 0) {
-                    html += uniqueThemes.map(t => {
+                    itemsHTML = uniqueThemes.map(t => {
                         const isActive = t.id === this.activeThemeId;
                         const filePath = t.filePath || '';
 
                         return `
-                            <div class="theme-item ${isActive ? 'active-theme' : ''}"
+                            <div class="theme-item water-local-theme-item ${isActive ? 'active-theme' : ''}"
+                                 data-theme-name="${t.name.toLowerCase()}"
                                  onclick="window.applyTheme('${t.id}')"
                                  style="${isActive ? 'border: 1px solid rgba(255, 105, 180, 0.4);' : ''}">
                                 <div class="script-name">${t.name}</div>
@@ -1387,13 +1394,20 @@ export default class Water extends Module {
                             </div>
                         `;
                     }).join('');
+                } else {
+                    itemsHTML = '<div class="no-items-msg">No local themes found.</div>';
                 }
 
-                if (html === '') {
-                    html = '<div class="no-items-msg">No local themes found.</div>';
-                }
+                localList.innerHTML = searchHTML + '<div id="water-local-themes-items">' + itemsHTML + '</div>';
 
-                localList.innerHTML = html;
+                (window as any).waterFilterLocalThemes = (query: string) => {
+                    const items = document.querySelectorAll('.water-local-theme-item');
+                    const q = query.toLowerCase().trim();
+                    items.forEach((item: any) => {
+                        const name = item.getAttribute('data-theme-name') || '';
+                        item.style.display = (!q || name.includes(q)) ? '' : 'none';
+                    });
+                };
             }
 
             (window as any).applyTheme = (id: string) => {
@@ -1887,10 +1901,9 @@ export default class Water extends Module {
             if (!list) return;
 
             const userscriptsEnabled = config.get('modules.resourceswapper.enableUserscripts', true) as boolean;
-            console.log('[Water] renderScripts called, userscriptsEnabled:', userscriptsEnabled, 'su.userscripts.length:', su.userscripts.length);
+            console.log('[Water] renderScripts called, userscriptsEnabled:', userscriptsEnabled, 'count:', su.userscripts.length);
 
             if (!userscriptsEnabled) {
-                console.log('[Water] Userscripts disabled, showing disabled message');
                 list.innerHTML = `
                     <div style="background: rgba(255, 100, 100, 0.15); border: 1px solid rgba(255, 100, 100, 0.3); border-radius: 6px; padding: 20px; margin: 20px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
                         <span class="material-icons" style="color: #ff6464; font-size: 28px;">warning</span>
@@ -1900,219 +1913,302 @@ export default class Water extends Module {
                 return;
             }
 
+            // Build the full scripts panel HTML
+            let html = '';
+
+            // --- Batch actions bar ---
+            const enabledCount = su.userscripts.filter(s => {
+                const isPurchased = s.fullpath.startsWith('[PURCHASED]');
+                const ns = isPurchased ? 'purchased' : 'local';
+                return config.get(`userscripts.${ns}.${s.name}.enabled`, true);
+            }).length;
+            const disabledCount = su.userscripts.length - enabledCount;
+
+            html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); margin-top: 8px;">
+                    <span style="color: rgba(255,255,255,0.5); font-size: 12px; font-weight: 500;">
+                        ${su.userscripts.length} loaded &middot; ${enabledCount} enabled &middot; ${disabledCount} disabled
+                    </span>
+                    <div style="display: flex; gap: 6px;">
+                        <button onclick="window.waterBatchEnable(true)" style="padding: 4px 10px; font-size: 11px; background: rgba(74,222,128,0.15); border: 1px solid rgba(74,222,128,0.3); border-radius: 4px; color: #4ade80; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(74,222,128,0.25)'" onmouseout="this.style.background='rgba(74,222,128,0.15)'">Enable All</button>
+                        <button onclick="window.waterBatchEnable(false)" style="padding: 4px 10px; font-size: 11px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; color: #ef4444; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">Disable All</button>
+                        <button onclick="window.waterReloadAll()" style="padding: 4px 10px; font-size: 11px; background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.3); border-radius: 4px; color: #facc15; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(250,204,21,0.25)'" onmouseout="this.style.background='rgba(250,204,21,0.15)'">&#x21bb; Reload All</button>
+                    </div>
+                </div>
+            `;
+
+            // --- Search bar ---
+            html += `
+                <div style="margin-bottom: 12px;">
+                    <input type="text" id="water-script-search" placeholder="Search scripts..." oninput="window.waterFilterScripts(this.value)"
+                           style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: rgba(255,255,255,0.9); font-size: 13px; outline: none; transition: border-color 0.2s;"
+                           onfocus="this.style.borderColor='rgba(255,105,180,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" />
+                </div>
+            `;
+
             if (!su.userscripts || su.userscripts.length === 0) {
-                list.innerHTML = '<div class="no-items-msg">No scripts found. Place .js files in Documents\\Water\\Scripts</div>';
+                html += '<div class="no-items-msg">No scripts found. Place .js files in Documents\\Water\\Scripts</div>';
+                list.innerHTML = html;
                 return;
             }
 
-            list.innerHTML = su.userscripts.map(script => {
-                // Generate a safe script ID for DOM elements
+            // --- Script cards ---
+            html += '<div id="water-scripts-cards">';
+            html += su.userscripts.map(script => {
                 const scriptId = script.name.replace(/[^a-zA-Z0-9]/g, '-').replace(/\.js$/, '');
-                
-                // Determine if this is a local or purchased script
                 const isPurchased = script.fullpath.startsWith('[PURCHASED]');
                 const namespace = isPurchased ? 'purchased' : 'local';
                 const isEnabled = config.get(`userscripts.${namespace}.${script.name}.enabled`, true) as boolean;
-                
                 const dropdownId = `water-script-settings-${scriptId}`;
 
+                // Metadata
                 const scriptName = (script.meta && script.meta.name) || script.name;
-                const scriptDesc = (script.meta && script.meta.desc) || '';
+                const scriptDesc = (script.meta && (script.meta.desc || script.meta.description)) || '';
+                const scriptAuthor = (script.meta && script.meta.author) || '';
 
+                // Type badge
+                let badgeHTML = '';
+                if (isPurchased || script.scriptType === 'premium') {
+                    badgeHTML = '<span style="display:inline-block;padding:2px 6px;font-size:9px;font-weight:700;border-radius:3px;background:linear-gradient(135deg,#ff69b4,#ff1493);color:#fff;margin-left:8px;letter-spacing:0.5px;">STORE</span>';
+                } else if (script.scriptType === 'bundled') {
+                    badgeHTML = '<span style="display:inline-block;padding:2px 6px;font-size:9px;font-weight:700;border-radius:3px;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);margin-left:8px;letter-spacing:0.5px;">BUNDLED</span>';
+                } else {
+                    badgeHTML = '<span style="display:inline-block;padding:2px 6px;font-size:9px;font-weight:700;border-radius:3px;background:rgba(59,130,246,0.2);color:#60a5fa;margin-left:8px;letter-spacing:0.5px;">LOCAL</span>';
+                }
+
+                // Health indicator
+                const healthHex = performanceMonitor.getHealthHex(script.name);
+                const healthScore = performanceMonitor.getHealthScore(script.name);
+                const execTime = performanceMonitor.getFormattedExecTime(script.name);
+                const healthDot = `<span title="Health: ${healthScore}/100 | Exec: ${execTime}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${healthHex};margin-right:8px;flex-shrink:0;"></span>`;
+
+                // Error badge
+                const errorCount = errorManager.getErrorCount(script.name);
+                const errorBadge = errorCount > 0
+                    ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;font-size:10px;font-weight:700;border-radius:9px;background:#ef4444;color:#fff;margin-left:6px;">${errorCount}</span>`
+                    : '';
+
+                // Settings
                 const hasSettings = script.settings && Object.keys(script.settings).length > 0;
-
                 const configArrow = hasSettings ? `
                     <span class="material-icons-outlined"
                           id="arrow-${scriptId}"
                           onclick="event.stopPropagation(); window.toggleScriptSettings('${scriptId}')"
-                          style="font-size: 24px; cursor: pointer; color: rgba(255,255,255,0.6); transition: all 0.2s; margin-right: 12px;"
-                          onmouseover="this.style.color='rgba(255,255,255,0.9)'"
-                          onmouseout="this.style.color='rgba(255,255,255,0.6)'">
+                          style="font-size: 20px; cursor: pointer; color: rgba(255,255,255,0.4); transition: all 0.2s; margin-right: 10px;"
+                          onmouseover="this.style.color='rgba(255,255,255,0.8)'"
+                          onmouseout="this.style.color='rgba(255,255,255,0.4)'">
                         keyboard_arrow_right
                     </span>
-                ` : '';
+                ` : '<span style="width:30px;display:inline-block;"></span>';
 
+                // Settings dropdown
                 let settingsHTML = '';
                 if (hasSettings) {
                     const settingsContent = Object.keys(script.settings)
                         .map(key => this.renderSettingControl(key, script.settings[key], script.name))
-                        .filter(html => html)
+                        .filter(h => h)
                         .join('');
 
                     if (settingsContent) {
+                        // Performance info at bottom of settings
+                        const perfInfo = `
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; gap: 16px; font-size: 11px; color: rgba(255,255,255,0.35);">
+                                <span>Exec: ${execTime}</span>
+                                <span>Health: ${healthScore}/100</span>
+                                <span>Errors: ${errorCount}</span>
+                            </div>
+                        `;
                         settingsHTML = `
-                            <div id="${dropdownId}" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
+                            <div id="${dropdownId}" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);">
                                 ${settingsContent}
+                                ${perfInfo}
                             </div>
                         `;
                     }
                 }
 
+                // Action buttons (reload only — edit removed; users edit via local folder)
+                const reloadBtn = `<span class="material-icons-outlined" onclick="event.stopPropagation(); window.waterReloadScript('${script.name}')" title="Reload script" style="font-size:18px;cursor:pointer;color:rgba(255,255,255,0.35);transition:all 0.2s;margin-left:8px;" onmouseover="this.style.color='#facc15'" onmouseout="this.style.color='rgba(255,255,255,0.35)'">refresh</span>`;
+
                 return `
-                    <div class="settNameSmall script-item" style="display: block; margin-bottom: 15px; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 6px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; flex: 1; cursor: ${hasSettings ? 'pointer' : 'default'};"
+                    <div class="water-script-card" data-script-name="${scriptName.toLowerCase()}" data-script-desc="${(scriptDesc || '').toLowerCase()}" data-script-author="${(scriptAuthor || '').toLowerCase()}"
+                         style="display:block; margin-bottom:10px; padding:14px 16px; background:rgba(255,255,255,0.04); border-radius:8px; border:1px solid rgba(255,255,255,0.06); transition: all 0.2s;"
+                         onmouseover="this.style.background='rgba(255,255,255,0.07)';this.style.borderColor='rgba(255,255,255,0.1)'"
+                         onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.06)'">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div style="display:flex;align-items:center;flex:1;cursor:${hasSettings ? 'pointer' : 'default'};"
                                  ${hasSettings ? `onclick="window.toggleScriptSettings('${scriptId}')"` : ''}>
                                 ${configArrow}
-                                <div style="display: flex; flex-direction: column;">
-                                    <span class="script-name">${scriptName}</span>
-                                    ${scriptDesc ? `<span style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">${scriptDesc}</span>` : ''}
+                                ${healthDot}
+                                <div style="display:flex;flex-direction:column;min-width:0;">
+                                    <div style="display:flex;align-items:center;flex-wrap:wrap;">
+                                        <span style="font-size:15px;font-weight:500;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${scriptName}</span>
+                                        ${badgeHTML}${errorBadge}
+                                    </div>
                                 </div>
                             </div>
-                            <label class="switch" style="margin: 0;" onclick="event.stopPropagation();">
-                                <input type="checkbox" id="water-script-${scriptId}"
-                                       ${isEnabled ? 'checked' : ''}
-                                       onchange="window.toggleWaterScript('${script.name}', this.checked)">
-                                <span class="slider"><span class="grooves"></span></span>
-                            </label>
+                            <div style="display:flex;align-items:center;flex-shrink:0;margin-left:12px;">
+                                ${reloadBtn}
+                                <label class="switch" style="margin:0 0 0 12px;" onclick="event.stopPropagation();">
+                                    <input type="checkbox" id="water-script-${scriptId}"
+                                           ${isEnabled ? 'checked' : ''}
+                                           onchange="window.toggleWaterScript('${script.name}', this.checked)">
+                                    <span class="slider"><span class="grooves"></span></span>
+                                </label>
+                            </div>
                         </div>
                         ${settingsHTML}
                     </div>
                 `;
             }).join('');
+            html += '</div>';
 
+            list.innerHTML = html;
+
+            // --- Wire up global handlers ---
             (window as any).toggleWaterScript = (scriptName: string, enabled: boolean) => {
-                // Determine if this is a local or purchased script
                 const script = su.userscripts.find(s => s.name === scriptName);
                 const isPurchased = script && script.fullpath.startsWith('[PURCHASED]');
-                
-                // Use appropriate namespace
                 const namespace = isPurchased ? 'purchased' : 'local';
-                const configKey = `userscripts.${namespace}.${scriptName}.enabled`;
-                
-                config.set(configKey, enabled);
-                console.log(`[Water] ${isPurchased ? 'Purchased' : 'Local'} script ${scriptName}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
-                console.log(`[Water] Config key: ${configKey}`);
-                console.log('[Water] Restart client to apply script changes');
+                config.set(`userscripts.${namespace}.${scriptName}.enabled`, enabled);
+                console.log(`[Water] ${namespace} script ${scriptName}: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+
+                // Update counter
+                this.renderScripts();
             };
 
             (window as any).toggleScriptSettings = (scriptId: string) => {
                 const dropdown = document.getElementById(`water-script-settings-${scriptId}`);
                 const arrow = document.getElementById(`arrow-${scriptId}`);
-                console.log(`[Water] Toggle script settings for ${scriptId}:`, {
-                    dropdownFound: !!dropdown,
-                    arrowFound: !!arrow,
-                    dropdownDisplay: dropdown?.style.display
-                });
                 if (dropdown && arrow) {
                     const isHidden = dropdown.style.display === 'none';
                     dropdown.style.display = isHidden ? 'block' : 'none';
                     arrow.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
-                    console.log(`[Water] Toggled ${scriptId}: display=${dropdown.style.display}, transform=${arrow.style.transform}`);
-                } else {
-                    console.warn(`[Water] Cannot toggle ${scriptId}: missing elements`);
                 }
             };
 
             (window as any).updateScriptSetting = (scriptName: string, settingKey: string, value: any) => {
+                console.log(`[Water] 🔧 updateScriptSetting called: script="${scriptName}", key="${settingKey}", value=`, value);
+                
                 const script = su.userscripts.find(s => s.name === scriptName);
-                if (!script || !script.settings || !script.settings[settingKey]) {
-                    console.error('[Water] Setting not found:', scriptName, settingKey);
+                if (!script) {
+                    console.error(`[Water] ❌ Script not found: ${scriptName}`);
+                    return;
+                }
+                if (!script.settings) {
+                    console.error(`[Water] ❌ Script has no settings: ${scriptName}`);
+                    return;
+                }
+                if (!script.settings[settingKey]) {
+                    console.error(`[Water] ❌ Setting key not found: ${settingKey} in ${scriptName}`);
                     return;
                 }
 
-                // ADDITION: Trim whitespace from string values
-                if (typeof value === 'string') {
-                    value = value.trim();
-                }
-
+                if (typeof value === 'string') value = value.trim();
                 script.settings[settingKey].value = value;
+                console.log(`[Water] ✓ Updated in-memory value for ${scriptName}.${settingKey} =`, value);
 
                 if (typeof script.settings[settingKey].changed === 'function') {
-                    try {
-                        script.settings[settingKey].changed(value);
-                        console.log(`[Water] Setting updated: ${scriptName} > ${settingKey} =`, value);
-                    } catch (e) {
-                        console.error('[Water] Error calling setting changed callback:', e);
+                    try { 
+                        console.log(`[Water] 📞 Calling changed() callback for ${scriptName}.${settingKey}`);
+                        script.settings[settingKey].changed(value); 
+                    } catch (e) { 
+                        console.error('[Water] Setting callback error:', e); 
                     }
                 }
 
-                // Save to config with appropriate namespace
+                // Save to config
                 try {
-                    // Determine if this is a local or purchased script
                     const isPurchased = script.fullpath.startsWith('[PURCHASED]');
-                    const namespace = isPurchased ? 'purchased' : 'local';
+                    const namespace = isPurchased ? 'purchased' : script.scriptType;
                     const configKey = `userscript.${namespace}.${scriptName.replace(/\.js$/, '')}`;
                     
-                    const savedSettings = config.get(configKey, {}) as any;
-                    savedSettings[settingKey] = value;
-                    config.set(configKey, savedSettings);
+                    console.log(`[Water] 💾 Saving to config:`);
+                    console.log(`  - isPurchased: ${isPurchased}`);
+                    console.log(`  - namespace: ${namespace}`);
+                    console.log(`  - scriptType: ${script.scriptType}`);
+                    console.log(`  - fullpath: ${script.fullpath}`);
+                    console.log(`  - configKey: ${configKey}`);
                     
-                    console.log(`[Water] Saved to config: ${configKey}.${settingKey} = ${value}`);
-                } catch (e) {
-                    console.error('[Water] Failed to save setting to config:', e);
+                    const savedSettings = config.get(configKey, {}) as any;
+                    console.log(`  - existing settings:`, savedSettings);
+                    
+                    savedSettings[settingKey] = value;
+                    console.log(`  - updated settings:`, savedSettings);
+                    
+                    config.set(configKey, savedSettings);
+                    console.log(`[Water] ✅ Saved to config successfully`);
+                    
+                    // Verify save
+                    const verified = config.get(configKey);
+                    console.log(`[Water] 🔍 Verification read:`, verified);
+                } catch (e) { 
+                    console.error('[Water] ❌ Save setting error:', e); 
                 }
 
-                // Check if this setting requires restart
+                // Smart restart detection
                 const setting = script.settings[settingKey];
-                
-                // Smart restart detection:
-                // 1. If explicitly set to true, show notification
-                // 2. If explicitly set to false, don't show
-                // 3. If undefined, use heuristics to detect
                 let needsRestart = false;
-                
-                if (setting.requiresRestart === true) {
-                    needsRestart = true;
-                } else if (setting.requiresRestart === false) {
-                    needsRestart = false;
-                } else {
-                    // Heuristic: Check if script runs at document-start or has already run
-                    // Scripts that run at document-start typically need restart
-                    if (script.runAt === 'document-start') {
-                        needsRestart = true;
-                        console.log(`[Water] Auto-detected restart needed for ${scriptName} (document-start script)`);
-                    } else if (script.hasRan) {
-                        // Script has already executed, so changes likely need restart
-                        // unless the script explicitly handles live updates
-                        needsRestart = true;
-                        console.log(`[Water] Auto-detected restart needed for ${scriptName} (script already executed)`);
-                    }
-                }
-                
-                if (needsRestart) {
-                    this.showRestartNotification();
-                }
+                if (setting.requiresRestart === true) needsRestart = true;
+                else if (setting.requiresRestart === false) needsRestart = false;
+                else if (script.runAt === 'document-start' || script.hasRan) needsRestart = true;
+
+                if (needsRestart) this.showRestartNotification();
             };
 
             (window as any).recordKeybind = (scriptName: string, settingKey: string, button: HTMLButtonElement) => {
                 button.textContent = 'Press any key...';
                 button.style.background = 'rgba(255, 255, 0, 0.2)';
-
                 const handleKeyPress = (e: KeyboardEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const keybind = {
-                        ctrl: e.ctrlKey,
-                        alt: e.altKey,
-                        shift: e.shiftKey,
-                        key: e.key
-                    };
-
-                    const modifiers = [
-                        keybind.ctrl ? 'Ctrl' : '',
-                        keybind.alt ? 'Alt' : '',
-                        keybind.shift ? 'Shift' : ''
-                    ].filter(m => m).join(' + ');
-                    const displayKey = modifiers ? `${modifiers} + ${keybind.key.toUpperCase()}` : keybind.key.toUpperCase();
-                    button.textContent = displayKey;
+                    e.preventDefault(); e.stopPropagation();
+                    const keybind = { ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, key: e.key };
+                    const modifiers = [keybind.ctrl ? 'Ctrl' : '', keybind.alt ? 'Alt' : '', keybind.shift ? 'Shift' : ''].filter(m => m).join(' + ');
+                    button.textContent = modifiers ? `${modifiers} + ${keybind.key.toUpperCase()}` : keybind.key.toUpperCase();
                     button.style.background = '';
-
                     (window as any).updateScriptSetting(scriptName, settingKey, keybind);
-
                     document.removeEventListener('keydown', handleKeyPress, true);
                 };
-
                 document.addEventListener('keydown', handleKeyPress, true);
             };
 
             (window as any).openScriptsFolder = () => {
                 const scriptsPath = getScriptsPath();
-                shell.openPath(scriptsPath).catch(err => {
-                    console.error('[Water] Failed to open scripts folder:', err);
+                shell.openPath(scriptsPath).catch(err => console.error('[Water] Open scripts folder error:', err));
+            };
+
+            // --- v2 handlers ---
+            (window as any).waterFilterScripts = (query: string) => {
+                const cards = document.querySelectorAll('.water-script-card');
+                const q = query.toLowerCase().trim();
+                cards.forEach((card: any) => {
+                    const name = card.getAttribute('data-script-name') || '';
+                    const desc = card.getAttribute('data-script-desc') || '';
+                    const author = card.getAttribute('data-script-author') || '';
+                    card.style.display = (!q || name.includes(q) || desc.includes(q) || author.includes(q)) ? 'block' : 'none';
                 });
             };
+
+            (window as any).waterBatchEnable = (enabled: boolean) => {
+                su.userscripts.forEach(script => {
+                    const isPurchased = script.fullpath.startsWith('[PURCHASED]');
+                    const ns = isPurchased ? 'purchased' : 'local';
+                    config.set(`userscripts.${ns}.${script.name}.enabled`, enabled);
+                });
+                console.log(`[Water] Batch ${enabled ? 'enabled' : 'disabled'} all scripts`);
+                this.renderScripts();
+                this.showRestartNotification();
+            };
+
+            (window as any).waterReloadAll = async () => {
+                await hotReload.reloadAll();
+                this.renderScripts();
+            };
+
+            (window as any).waterReloadScript = async (name: string) => {
+                await hotReload.reloadSingleScript(name);
+                this.renderScripts();
+            };
+
         } catch (e) {
             console.error('[Water] Render scripts error:', e);
             const list = document.getElementById('water-scripts-list');
@@ -2121,7 +2217,7 @@ export default class Water extends Module {
     }
 
     renderSettingControl(settingKey: string, setting: any, scriptName: string): string {
-        const settingId = `water-script-setting-${scriptName}-${settingKey}`;
+        const settingId = `water-script-setting-${scriptName.replace(/[^a-zA-Z0-9]/g, '-')}-${settingKey}`;
 
         if (!setting || typeof setting !== 'object') return '';
         if (!setting.title || !setting.type || setting.value === undefined) return '';
@@ -2129,12 +2225,22 @@ export default class Water extends Module {
 
         let controlHTML = '';
         const tip = setting.desc || '';
+        const escapedTip = tip.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+
+        // Common styles
+        const inputBg = 'rgba(0,0,0,0.35)';
+        const inputBorder = 'rgba(255,255,255,0.12)';
+        const inputBorderFocus = 'rgba(255,105,180,0.5)';
+        const inputRadius = '5px';
+        const inputColor = 'rgba(255,255,255,0.9)';
+        const labelColor = 'rgba(255,255,255,0.85)';
+        const descColor = 'rgba(255,255,255,0.4)';
 
         switch (setting.type) {
-            case 'bool':
+            case 'bool': {
                 if (typeof setting.value !== 'boolean') return '';
                 controlHTML = `
-                    <label class="switch" style="margin: 0;">
+                    <label class="switch" style="margin: 0; flex-shrink: 0;">
                         <input type="checkbox" id="${settingId}"
                                ${setting.value ? 'checked' : ''}
                                onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.checked)">
@@ -2142,53 +2248,97 @@ export default class Water extends Module {
                     </label>
                 `;
                 break;
+            }
 
-            case 'num':
+            case 'num': {
                 if (typeof setting.value !== 'number') return '';
                 const min = setting.min !== undefined ? setting.min : 0;
                 const max = setting.max !== undefined ? setting.max : 100;
                 const step = setting.step !== undefined ? setting.step : 1;
+
+                // Determine display precision from step
+                const precision = step < 1 ? (step < 0.01 ? 3 : 2) : (step >= 10 ? 0 : 1);
+
+                // Slider track fill gradient
+                const pct = ((setting.value - min) / (max - min)) * 100;
+
                 controlHTML = `
-                    <div style="display: flex; align-items: center; gap: 10px; min-width: 280px;">
+                    <div style="display:flex;align-items:center;gap:6px;width:170px;">
                         <input type="range" id="${settingId}"
                                min="${min}" max="${max}" step="${step}"
                                value="${setting.value}"
-                               class="sliderVal" style="flex: 1;"
-                               oninput="document.getElementById('${settingId}-num').value=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value))">
+                               style="flex:1;min-width:0;height:5px;border-radius:3px;outline:none;cursor:pointer;accent-color:#ff69b4;
+                                      background:linear-gradient(to right, #ff69b4 0%, #ff69b4 ${pct}%, rgba(255,255,255,0.1) ${pct}%, rgba(255,255,255,0.1) 100%);"
+                               oninput="
+                                   document.getElementById('${settingId}-num').value = parseFloat(this.value).toFixed(${precision});
+                                   var pct = ((this.value - ${min}) / (${max} - ${min})) * 100;
+                                   this.style.background = 'linear-gradient(to right, #ff69b4 0%, #ff69b4 ' + pct + '%, rgba(255,255,255,0.1) ' + pct + '%, rgba(255,255,255,0.1) 100%)';
+                                   window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value));
+                               ">
                         <input type="number" id="${settingId}-num"
                                min="${min}" max="${max}" step="${step}"
                                value="${setting.value}"
-                               style="width: 70px; padding: 6px 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: rgba(255, 255, 255, 0.9); font-size: 14px; text-align: center;"
-                               oninput="document.getElementById('${settingId}').value=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value))"
+                               style="width:48px;padding:3px 4px;background:${inputBg};border:1px solid ${inputBorder};border-radius:${inputRadius};color:${inputColor};font-size:11px;text-align:center;outline:none;transition:border-color 0.2s;flex-shrink:0;"
+                               onfocus="this.style.borderColor='${inputBorderFocus}'"
+                               onblur="this.style.borderColor='${inputBorder}'"
+                               oninput="
+                                   document.getElementById('${settingId}').value = this.value;
+                                   var pct = ((this.value - ${min}) / (${max} - ${min})) * 100;
+                                   document.getElementById('${settingId}').style.background = 'linear-gradient(to right, #ff69b4 0%, #ff69b4 ' + pct + '%, rgba(255,255,255,0.1) ' + pct + '%, rgba(255,255,255,0.1) 100%)';
+                                   window.updateScriptSetting('${scriptName}', '${settingKey}', parseFloat(this.value));
+                               "
                                onchange="let v=parseFloat(this.value); if(v<${min})v=${min}; if(v>${max})v=${max}; this.value=v; document.getElementById('${settingId}').value=v; window.updateScriptSetting('${scriptName}', '${settingKey}', v)">
                     </div>
                 `;
                 break;
+            }
 
-            case 'sel':
+            case 'sel': {
                 if (!Array.isArray(setting.opts) || setting.opts.length < 2) return '';
                 if (!setting.opts.includes(setting.value)) return '';
+
                 controlHTML = `
-                    <select id="${settingId}"
-                            class="inputGrey2"
-                            style="min-width: 150px; padding: 8px 12px;"
-                            onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
-                        ${setting.opts.map((opt: string) => `<option value="${opt}" ${opt === setting.value ? 'selected' : ''}>${opt}</option>`).join('')}
-                    </select>
+                    <div style="position:relative;display:inline-block;min-width:110px;max-width:170px;">
+                        <select id="${settingId}"
+                                style="width:100%;padding:4px 24px 4px 8px;background:${inputBg};border:1px solid ${inputBorder};border-radius:${inputRadius};color:${inputColor};font-size:12px;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;transition:border-color 0.2s;background-image:url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22rgba(255,255,255,0.5)%22 stroke-width=%222%22%3E%3Cpath d=%22M6 9l6 6 6-6%22/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 6px center;"
+                                onfocus="this.style.borderColor='${inputBorderFocus}'"
+                                onblur="this.style.borderColor='${inputBorder}'"
+                                onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
+                            ${setting.opts.map((opt: string) => `<option value="${opt}" ${opt === setting.value ? 'selected' : ''} style="background:#1a1a2e;color:#fff;">${opt}</option>`).join('')}
+                        </select>
+                    </div>
                 `;
                 break;
+            }
 
-            case 'color':
-                if (typeof setting.value !== 'string' || !setting.value.match(/^#([0-9a-fA-F]{3}){2}$/)) return '';
+            case 'color': {
+                if (typeof setting.value !== 'string') return '';
+                // Accept both 3 and 6 char hex
+                if (!setting.value.match(/^#([0-9a-fA-F]{3}){1,2}$/)) return '';
+
                 controlHTML = `
-                    <input type="color" id="${settingId}"
-                           value="${setting.value}"
-                           style="width: 50px; height: 32px; border: 2px solid rgba(255,255,255,0.2); border-radius: 4px; background: transparent; cursor: pointer;"
-                           onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <div style="position:relative;width:26px;height:26px;border-radius:${inputRadius};overflow:hidden;border:2px solid ${inputBorder};cursor:pointer;transition:border-color 0.2s;flex-shrink:0;"
+                             onmouseover="this.style.borderColor='${inputBorderFocus}'"
+                             onmouseout="this.style.borderColor='${inputBorder}'">
+                            <input type="color" id="${settingId}"
+                                   value="${setting.value}"
+                                   style="position:absolute;top:-4px;left:-4px;width:34px;height:34px;border:none;cursor:pointer;background:transparent;"
+                                   oninput="document.getElementById('${settingId}-hex').value=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
+                        </div>
+                        <input type="text" id="${settingId}-hex"
+                               value="${setting.value}"
+                               maxlength="7"
+                               style="width:64px;padding:3px 6px;background:${inputBg};border:1px solid ${inputBorder};border-radius:${inputRadius};color:${inputColor};font-size:11px;font-family:'Consolas',monospace;text-align:center;outline:none;transition:border-color 0.2s;"
+                               onfocus="this.style.borderColor='${inputBorderFocus}'"
+                               onblur="this.style.borderColor='${inputBorder}'"
+                               onchange="if(this.value.match(/^#[0-9a-fA-F]{6}$/)){document.getElementById('${settingId}').value=this.value; window.updateScriptSetting('${scriptName}', '${settingKey}', this.value);}">
+                    </div>
                 `;
                 break;
+            }
 
-            case 'keybind':
+            case 'keybind': {
                 if (typeof setting.value !== 'object' || Array.isArray(setting.value)) return '';
                 if (typeof setting.value.alt !== 'boolean' || typeof setting.value.ctrl !== 'boolean' ||
                     typeof setting.value.shift !== 'boolean' || typeof setting.value.key !== 'string') return '';
@@ -2199,38 +2349,55 @@ export default class Water extends Module {
                     kb.shift ? 'Shift' : ''
                 ].filter((m: string) => m).join(' + ');
                 const displayKey = modifiers ? `${modifiers} + ${kb.key.toUpperCase()}` : kb.key.toUpperCase();
+
                 controlHTML = `
                     <button id="${settingId}"
-                            class="inputGrey2"
-                            style="min-width: 120px; padding: 8px 12px; cursor: pointer;"
+                            style="min-width:96px;padding:4px 10px;background:${inputBg};border:1px solid ${inputBorder};border-radius:${inputRadius};color:${inputColor};font-size:12px;cursor:pointer;outline:none;transition:all 0.2s;letter-spacing:0.3px;"
+                            onmouseover="this.style.borderColor='${inputBorderFocus}';this.style.background='rgba(255,105,180,0.08)'"
+                            onmouseout="this.style.borderColor='${inputBorder}';this.style.background='${inputBg}'"
                             onclick="window.recordKeybind('${scriptName}', '${settingKey}', this)">
-                        ${displayKey}
+                        ⌨ ${displayKey}
                     </button>
                 `;
                 break;
+            }
 
-            case 'text':
+            case 'text': {
                 if (typeof setting.value !== 'string') return '';
                 const escapedValue = setting.value.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                 controlHTML = `
                     <input type="text" id="${settingId}"
                            value="${escapedValue}"
-                           class="inputGrey2"
-                           style="min-width: 200px; padding: 8px 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; color: rgba(255, 255, 255, 0.9);"
+                           style="width:160px;padding:4px 8px;background:${inputBg};border:1px solid ${inputBorder};border-radius:${inputRadius};color:${inputColor};font-size:12px;outline:none;transition:border-color 0.2s;"
+                           onfocus="this.style.borderColor='${inputBorderFocus}'"
+                           onblur="this.style.borderColor='${inputBorder}'"
                            onchange="window.updateScriptSetting('${scriptName}', '${settingKey}', this.value)">
                 `;
                 break;
+            }
 
             default:
                 return '';
         }
 
+        // Build the setting row with label, description, live value, and control
+        const liveValueSpan = '';
+
+        const descHTML = tip
+            ? `<span style="display:block;font-size:10px;color:${descColor};margin-top:1px;line-height:1.3;">${escapedTip}</span>`
+            : '';
+
         return `
-            <div class='settName' style='margin: 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);'${tip ? ` title='${tip.replace(/'/g, "&apos;")}'` : ''}>
-                <span style="color: rgba(255,255,255,0.85); font-size: 14px;">
-                    ${setting.title}
-                </span>
-                <span>${controlHTML}</span>
+            <div class="water-setting-row" style="margin:4px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;border-radius:5px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);transition:all 0.15s;"
+                 onmouseover="this.style.background='rgba(255,255,255,0.05)';this.style.borderColor='rgba(255,255,255,0.08)'"
+                 onmouseout="this.style.background='rgba(255,255,255,0.02)';this.style.borderColor='rgba(255,255,255,0.04)'">
+                <div style="display:flex;flex-direction:column;min-width:0;flex:1;">
+                    <span style="color:${labelColor};font-size:12px;font-weight:500;display:flex;align-items:center;">
+                        ${setting.title}${liveValueSpan}
+                    </span>
+                    ${descHTML}
+                </div>
+                <div style="flex-shrink:0;">${controlHTML}</div>
             </div>
         `;
     }
@@ -2242,12 +2409,20 @@ export default class Water extends Module {
 
             const toggles = this.getUIToggles();
 
-            list.innerHTML = toggles.map(toggle => {
+            const searchHTML = `
+                <div style="margin-bottom: 12px;">
+                    <input type="text" id="water-ui-search" placeholder="Search UI toggles..." oninput="window.waterFilterUIToggles(this.value)"
+                           style="width: 100%; box-sizing: border-box; padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: rgba(255,255,255,0.9); font-size: 13px; outline: none; transition: border-color 0.2s; margin-top: 8px;"
+                           onfocus="this.style.borderColor='rgba(255,105,180,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" />
+                </div>
+            `;
+
+            const togglesHTML = toggles.map(toggle => {
                 const savedState = localStorage.getItem(`water-ui-${toggle.id}`);
                 const isOn = savedState === null ? toggle.defaultOn : savedState === 'true';
 
                 return `
-                    <div class="settNameSmall script-item">
+                    <div class="settNameSmall script-item water-ui-toggle-item" data-toggle-name="${toggle.name.toLowerCase()}">
                         <span class="script-name">${toggle.name}${toggle.requiresRestart ? ' <span style="color: #ff6464;">*</span>' : ''}</span>
                         <label class="switch" style="margin-left: 10px;">
                             <input type="checkbox" id="water-ui-${toggle.id}"
@@ -2258,6 +2433,17 @@ export default class Water extends Module {
                     </div>
                 `;
             }).join('');
+
+            list.innerHTML = searchHTML + '<div id="water-ui-toggles-list">' + togglesHTML + '</div>';
+
+            (window as any).waterFilterUIToggles = (query: string) => {
+                const items = document.querySelectorAll('.water-ui-toggle-item');
+                const q = query.toLowerCase().trim();
+                items.forEach((item: any) => {
+                    const name = item.getAttribute('data-toggle-name') || '';
+                    item.style.display = (!q || name.includes(q)) ? '' : 'none';
+                });
+            };
 
             (window as any).toggleWaterUI = (toggleId: string, enabled: boolean) => {
                 const toggle = this.getUIToggles().find(t => t.id === toggleId);
@@ -2306,6 +2492,9 @@ export default class Water extends Module {
         ];
     }
 
+    // Debug Console removed - keeping only notification system
+    // renderDebugConsole() method removed to simplify UI
+    
     applyUIToggles() {
         try {
             const toggles = this.getUIToggles();
@@ -2388,27 +2577,38 @@ export default class Water extends Module {
             #water-toast-container {
                 position: fixed;
                 top: 20px;
-                right: 20px;
+                left: 50%;
+                transform: translateX(-50%);
                 z-index: 999999999;
                 display: block;
                 width: auto;
-                max-width: 360px;
+                max-width: calc(100vw - 40px);
                 pointer-events: none;
+            }
+            
+            @media (max-width: 500px) {
+                #water-toast-container {
+                    max-width: calc(100vw - 20px);
+                }
             }
             
             .water-toast {
                 display: flex;
                 align-items: center;
                 width: 100%;
+                max-width: 450px;
+                margin: 0 auto;
                 padding: 18px 20px;
                 border-radius: 10px;
                 box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-                overflow: hidden;
+                overflow: visible;
                 animation: waterToastSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
                 pointer-events: all;
                 background: radial-gradient(circle at top left, #dc2626, #000000);
                 position: relative;
                 border: 1px solid rgba(220, 38, 38, 0.3);
+                word-wrap: break-word;
+                overflow-wrap: break-word;
             }
             
             .water-toast.closing {

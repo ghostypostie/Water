@@ -4,6 +4,22 @@ import { Context, RunAt, fromURL } from './context';
 import ModuleManger from './module/manager';
 import { join } from 'path';
 
+// Filter console output to suppress GPU errors (but don't disable GPU itself)
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+    const message = args.join(' ');
+    // Suppress GPU-related error logs only
+    if (message.includes('GL_INVALID') || 
+        message.includes('glCopySubTexture') || 
+        message.includes('gl_utils.cc') ||
+        message.includes('raster_decoder.cc') ||
+        message.includes('mailbox') ||
+        message.includes('shared image')) {
+        return;
+    }
+    originalConsoleError.apply(console, args);
+};
+
 // IPC handler for getting user data path
 ipcMain.on('get-user-data-path', (event) => {
     event.returnValue = app.getPath('userData');

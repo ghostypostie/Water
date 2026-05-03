@@ -11,3 +11,7 @@ src/modules/_*.ts
 
 # Private bundled scripts folder (not uploaded to GitHub)
 assets/scripts/
+
+# Development logs (FOR TESTING ONLY - DELETE FOR PRODUCTION)
+dev-logs.txt
+dev-logger.js

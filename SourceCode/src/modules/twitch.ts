@@ -22,6 +22,9 @@ export default class TwitchChat extends Module {
 
     twitchUI = new TwitchUI(this);
 
+    // Store reference for use in options
+    private moduleInstance = this;
+
     options = [
         new TextInput(this, {
             name: 'Channel Name',
@@ -38,6 +41,18 @@ export default class TwitchChat extends Module {
                 { name: 'Anonymous (Read Only)', value: 'anonymous' },
                 { name: 'OAuth Connection (Read/Write)', value: 'bot' },
             ],
+            onChange: (value: string) => {
+                logger.log(`[Dropdown onChange] Connection mode changed to: ${value}`);
+                
+                // Flash when OAuth is selected
+                if (value === 'bot') {
+                    logger.log('[Dropdown onChange] Triggering flash...');
+                    // Use setTimeout to ensure DOM is ready
+                    setTimeout(() => {
+                        this.flashTwitchSettingsButton();
+                    }, 100);
+                }
+            },
         }),
         new Slider(this, {
             name: 'Panel Height',
@@ -99,7 +114,6 @@ export default class TwitchChat extends Module {
     private readonly TWITCH_GQL_URL = 'https://gql.twitch.tv/gql';
     private readonly TWITCH_GQL_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
     private globalBadgesFetched = false;
-    activeFilters: Set<string> = new Set();
     messageCleanupTimer: ReturnType<typeof setInterval> | null = null;
     
     // Bot mode properties
@@ -127,11 +141,7 @@ export default class TwitchChat extends Module {
 
     renderer() {
         // Set up /twitch command filter FIRST
-        window.addEventListener('twitch-filter-toggle', () => {
-            this.toggleTwitchFilter();
-        });
-
-        // Intercept Krunker chat for /twitch command
+        // Intercept Krunker chat for /msg command
         this.setupTwitchCommand();
 
         // Set default config values
@@ -182,6 +192,17 @@ export default class TwitchChat extends Module {
         }
         
         this.config.onChange('connectionMode', () => {
+            const newMode = this.config.get('connectionMode', 'anonymous');
+            logger.log(`[ConnectionMode] Changed to: ${newMode}`);
+            
+            // Flash Twitch Settings button whenever OAuth is selected
+            if (newMode === 'bot') {
+                logger.log('[ConnectionMode] OAuth selected - triggering flash');
+                this.flashTwitchSettingsButton();
+            } else {
+                logger.log('[ConnectionMode] Anonymous selected - no flash');
+            }
+            
             // Reconnect when mode changes
             this.disconnect();
             const channel = this.config.get('channel', '');
@@ -222,106 +243,6 @@ export default class TwitchChat extends Module {
                 this.config.set(key, value);
             }
         }
-    }
-
-    toggleTwitchFilter() {
-        const chatList = document.getElementById('chatList');
-        if (!chatList) {
-            logger.error('chatList not found - cannot toggle filter');
-            return;
-        }
-
-        const isTwitchFilterActive = this.activeFilters.has('twitch');
-
-        if (isTwitchFilterActive) {
-            // Turn off Twitch filter
-            this.activeFilters.delete('twitch');
-            this.applyFilters();
-            this.showTwitchNotification('All Messages Visible', '#00FF00', false);
-        } else {
-            // Turn on Twitch filter
-            this.activeFilters.add('twitch');
-            this.applyFilters();
-            
-            const twitchCount = chatList.querySelectorAll('[data-twitch="true"]').length;
-            this.showTwitchNotification(`Showing Twitch Only (${twitchCount} messages)`, '#9147FF', true);
-        }
-        
-        this.updatePlaceholder();
-    }
-
-    private applyFilters() {
-        // Remove existing Twitch filter styles
-        let twitchStyle = document.getElementById('twitch-filter-style');
-        if (!twitchStyle) {
-            twitchStyle = document.createElement('style');
-            twitchStyle.id = 'twitch-filter-style';
-            document.head.appendChild(twitchStyle);
-        }
-
-        if (this.activeFilters.has('twitch')) {
-            // Hide all non-Twitch messages
-            twitchStyle.textContent = `
-                #chatList > div:not([data-twitch="true"]) { 
-                    display: none !important; 
-                }
-            `;
-        } else {
-            // Show all messages
-            twitchStyle.textContent = '';
-        }
-    }
-
-    private updatePlaceholder() {
-        const chatInput = document.getElementById('chatInput') as HTMLInputElement;
-        if (!chatInput) return;
-
-        if (this.activeFilters.has('twitch')) {
-            chatInput.placeholder = 'Showing Twitch Only';
-        } else {
-            // Don't override if other filters might be active
-            if (chatInput.placeholder.includes('Showing')) {
-                // Another filter is active, don't change
-                return;
-            }
-            chatInput.placeholder = 'Enter Message';
-        }
-    }
-
-    private showTwitchNotification(text: string, color: string, isActive: boolean) {
-        // Remove existing notifications
-        document.querySelectorAll('.chat-filter-notif').forEach(n => n.remove());
-
-        const notif = document.createElement('div');
-        notif.className = 'chat-filter-notif';
-        notif.innerHTML = `<span style="color: ${color}; font-weight: bold;">[Twitch Filter]</span> <span style="color: rgba(255,255,255,0.85); margin-left: 6px;">${text}</span>`;
-        notif.style.cssText = `
-            position: fixed;
-            top: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000000;
-            padding: 12px 24px;
-            border-radius: 8px;
-            background: rgba(0,0,0,0.9);
-            border-left: 4px solid ${color};
-            font-size: 15px;
-            font-family: gamefont, sans-serif;
-            opacity: 1;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-        `;
-
-        document.body.appendChild(notif);
-
-        setTimeout(() => {
-            notif.style.opacity = '0';
-            setTimeout(() => {
-                if (notif.parentNode) notif.parentNode.removeChild(notif);
-            }, 300);
-        }, 2500);
     }
 
     ensurePanelExists() {
@@ -446,8 +367,9 @@ export default class TwitchChat extends Module {
         // Show sending state
         this.showSendButtonState('sending', 'Sending...');
         
-        // Send message
+        // Send message - Twitch will echo it back through PRIVMSG
         this.sendMessage(message);
+        logger.log(`[Send] Sent message to Twitch: ${message}`);
         
         // Clear input
         this.twitchInputBox.value = '';
@@ -512,7 +434,8 @@ export default class TwitchChat extends Module {
         const originalSend = (window as any).sendChat;
         
         (window as any).sendChat = (message: string) => {
-            // Check if message starts with /msg
+            // ONLY intercept if message starts with /msg
+            // Let ALL other commands (including /c, /ff, etc.) pass through
             if (message && message.trim().startsWith('/msg ')) {
                 const twitchMessage = message.trim().substring(5); // Remove "/msg "
                 
@@ -533,16 +456,18 @@ export default class TwitchChat extends Module {
                     return;
                 }
                 
-                // Send to Twitch
+                // Send to Twitch - it will echo back through PRIVMSG
                 this.sendMessage(twitchMessage);
+                logger.log(`[/msg] Sent message to Twitch: ${twitchMessage}`);
+                
                 this.showKrunkerChatMessage(`[Twitch] Sent to #${this.channel}`, '#9146ff');
                 
                 // Clear the input
                 chatInput.value = '';
-                return;
+                return; // Don't call originalSend for /msg
             }
             
-            // Call original send function for normal messages
+            // For ALL other messages (including Krunker commands), call original function
             if (originalSend) {
                 originalSend(message);
             }
@@ -560,6 +485,66 @@ export default class TwitchChat extends Module {
         
         chatList.appendChild(chatItem);
         chatList.scrollTop = chatList.scrollHeight;
+    }
+
+    flashTwitchSettingsButton() {
+        // Find the Twitch Settings button row (the entire setBodH element)
+        setTimeout(() => {
+            logger.log('[Flash] Looking for Twitch Settings button...');
+            
+            const settHolder = document.getElementById('settHolder');
+            if (!settHolder) {
+                logger.error('[Flash] settHolder not found');
+                return;
+            }
+
+            // Find all setting rows
+            const settingRows = settHolder.querySelectorAll('.setBodH');
+            logger.log(`[Flash] Found ${settingRows.length} setting rows`);
+            
+            for (const row of settingRows) {
+                // Check if this row contains "Twitch Settings" text
+                const settName = row.querySelector('.settName');
+                
+                if (settName) {
+                    const nameSpan = settName.querySelector('.name');
+                    const descSpan = settName.querySelector('.description');
+                    
+                    logger.log(`[Flash] Checking row - name: "${nameSpan?.textContent}", desc: "${descSpan?.textContent}"`);
+                    
+                    if (nameSpan && nameSpan.textContent?.includes('Twitch Settings')) {
+                        logger.log('[Flash] Found Twitch Settings row! Flashing entire row...');
+                        
+                        const rowElement = row as HTMLElement;
+                        
+                        // Store original background
+                        const originalBg = rowElement.style.backgroundColor || '';
+                        
+                        // Add flash animation with deep pink
+                        rowElement.style.transition = 'background-color 0.3s ease';
+                        rowElement.style.backgroundColor = '#FF1493'; // Deep pink
+                        
+                        // Flash twice (2 seconds total: 500ms pink, 500ms normal, 500ms pink, 500ms normal)
+                        setTimeout(() => {
+                            rowElement.style.backgroundColor = originalBg;
+                            setTimeout(() => {
+                                rowElement.style.backgroundColor = '#FF1493';
+                                setTimeout(() => {
+                                    rowElement.style.backgroundColor = originalBg;
+                                    // Remove transition after animation
+                                    setTimeout(() => {
+                                        rowElement.style.transition = '';
+                                        logger.log('[Flash] Flash animation complete');
+                                    }, 300);
+                                }, 500);
+                            }, 500);
+                        }, 500);
+                        
+                        break;
+                    }
+                }
+            }
+        }, 200); // Delay to ensure DOM is ready
     }
 
     startPositionTracking() {
@@ -683,7 +668,7 @@ export default class TwitchChat extends Module {
                 -ms-overflow-style: none;
                 scrollbar-width: none;
                 display: flex;
-                flex-direction: column-reverse;
+                flex-direction: column;
                 justify-content: flex-start;
                 min-height: 100%;
                 font-family: gamefont, sans-serif;
@@ -730,7 +715,7 @@ export default class TwitchChat extends Module {
             }
             #twitchInputBox {
                 flex: 1;
-                background: rgba(255,255,255,0.1);
+                background-color: rgba(0, 0, 0, .4);
                 border: 1px solid rgba(255,255,255,0.2);
                 border-radius: 4px;
                 padding: 8px 10px;
@@ -1057,14 +1042,14 @@ export default class TwitchChat extends Module {
             if (line.startsWith('PING')) {
                 this.ws!.send('PONG :tmi.twitch.tv');
             } else if (line.includes('Welcome, GLHF!')) {
-                logger.log(`Successfully joined #${this.channel}`);
+                logger.log(`Successfully joined ${this.channel}`);
                 this.connected = true;
                 this.reconnectAttempts = 0;
                 // Show joined message in Twitch panel (only once per session)
                 if (!this.joinedMessageShown) {
                     const connectionMode = this.config.get('connectionMode', 'anonymous');
                     const authType = connectionMode === 'bot' ? ' (Bot authenticated)' : '';
-                    this.showSystemMessage(`Joined #${this.channel}${authType}`);
+                    this.showSystemMessage(`Joined ${this.channel}${authType}`);
                     this.joinedMessageShown = true;
                 }
                 // Update input box visibility
@@ -1075,10 +1060,10 @@ export default class TwitchChat extends Module {
                 this.parseUserNotice(line);
             } else if (line.includes(' 001 ') && !this.joinedMessageShown) {
                 // RPL_WELCOME - numeric reply for successful bot auth
-                logger.log(`Bot authentication successful for #${this.channel}`);
+                logger.log(`Bot authentication successful for ${this.channel}`);
                 this.connected = true;
                 this.reconnectAttempts = 0;
-                this.showSystemMessage(`Bot authenticated & joined #${this.channel}`);
+                this.showSystemMessage(`Bot authenticated & joined ${this.channel}`);
                 this.joinedMessageShown = true;
                 // Update input box visibility
                 this.updateInputBoxVisibility();
@@ -1106,6 +1091,9 @@ export default class TwitchChat extends Module {
             if (!msgMatch) return;
             let message = msgMatch[1];
 
+            // Debug: Log all messages including our own
+            logger.log(`[PRIVMSG] ${username}: ${message}`);
+
             // Clean up reply messages - remove @mention prefix if it's a reply
             if (tags['reply-parent-msg-id']) {
                 // Reply messages often start with @username, remove it
@@ -1118,6 +1106,7 @@ export default class TwitchChat extends Module {
             }
             
             // Inject to separate Twitch panel only (not Krunker chat)
+            // This includes ALL messages, including your own
             this.injectToTwitchPanel(username, message, tags);
         } catch (error) {
             logger.error('Error parsing message:', error);
@@ -1182,11 +1171,11 @@ export default class TwitchChat extends Module {
         chatItem.appendChild(document.createTextNode(': '));
         chatItem.appendChild(messageSpan);
 
-        // Append new messages (with flex-direction: column-reverse, newest at top)
+        // Append new messages to bottom (newest at bottom)
         this.twitchChatList.appendChild(chatItem);
 
-        // Auto-scroll to show latest messages (scroll to top since reversed)
-        this.twitchChatList.scrollTop = 0;
+        // Auto-scroll to bottom to show latest messages
+        this.twitchChatList.scrollTop = this.twitchChatList.scrollHeight;
     }
 
     getGenericName(tags: Record<string, string>): string {
@@ -1256,15 +1245,15 @@ export default class TwitchChat extends Module {
         
         const messageSpan = document.createElement('span');
         messageSpan.className = 'twitchChatMsg';
-        messageSpan.style.color = '#00FF00'; // Green for system messages
+        messageSpan.style.color = '#FF1493'; // Pink for system messages
         messageSpan.textContent = `\u200E${message}\u200E`;
         
         chatItem.appendChild(messageSpan);
-        // Append so it appears at top (with column-reverse)
+        // Append to bottom
         this.twitchChatList.appendChild(chatItem);
         
-        // Auto-scroll to top (since reversed)
-        this.twitchChatList.scrollTop = 0;
+        // Auto-scroll to bottom
+        this.twitchChatList.scrollTop = this.twitchChatList.scrollHeight;
     }
 
     startMessageCleanup() {

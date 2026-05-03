@@ -1,5 +1,5 @@
 ﻿import ClientOption from './index';
-import { showRestartToast } from '../utils/toast';
+import { showRestartToast, showInstantToast } from '../utils/toast';
 
 export default class Checkbox extends ClientOption {
     generate(): HTMLElement {
@@ -15,7 +15,13 @@ export default class Checkbox extends ClientOption {
         input.onchange = () => {
             this.module.config.set(this.id, input.checked);
             this.onChange?.(input.checked);
-            showRestartToast();
+            
+            // Show appropriate toast based on whether restart is needed
+            if (this.needsRestart) {
+                showRestartToast();
+            } else {
+                showInstantToast();
+            }
         };
         
         let span = document.createElement('span');

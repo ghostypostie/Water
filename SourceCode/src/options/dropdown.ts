@@ -1,6 +1,6 @@
 ﻿import Module from '../module/index';
 import ClientOption from './index';
-import { showRestartToast } from '../utils/toast';
+import { showRestartToast, showInstantToast } from '../utils/toast';
 
 export default class Dropdown extends ClientOption {
     options: {
@@ -46,7 +46,13 @@ export default class Dropdown extends ClientOption {
             let value = isNaN(parseFloat(select.value)) ? select.value : parseFloat(select.value);
             this.module.config.set(this.id, value);
             this.onChange?.(value);
-            showRestartToast();
+            
+            // Show appropriate toast based on whether restart is needed
+            if (this.needsRestart) {
+                showRestartToast();
+            } else {
+                showInstantToast();
+            }
         }
 
         container.appendChild(select);

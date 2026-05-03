@@ -34,10 +34,23 @@ export default class Manager {
             else {
                 console.log(`[Manager] Loading module file: ${file}`);
                 
+                // Special logging for water.js
+                if (file.includes('water.js')) {
+                    console.log(`[Manager] ⭐ FOUND water.js at path: ${path}`);
+                }
+                
                 try {
                     let required = require(path);
                     let imported = required.default ? required.default : required;
                     console.log(`[Manager] Imported from ${file}:`, imported?.name || 'unnamed');
+                    
+                    // Special logging for water.js
+                    if (file.includes('water.js')) {
+                        console.log(`[Manager] ⭐ water.js required:`, required);
+                        console.log(`[Manager] ⭐ water.js imported:`, imported);
+                        console.log(`[Manager] ⭐ water.js imported.name:`, imported?.name);
+                        console.log(`[Manager] ⭐ water.js is function?:`, typeof imported === 'function');
+                    }
                     
                     let ModuleClass = imported;
                     
@@ -45,10 +58,24 @@ export default class Manager {
                     if (!ModuleClass || typeof ModuleClass !== 'function') continue;
 
                     let index = this.cached.findIndex(x => x instanceof ModuleClass);
-                    if (index >= 0) continue;
+                    if (index >= 0) {
+                        if (file.includes('water.js')) {
+                            console.log(`[Manager] ⭐ water.js SKIPPED - already in cache at index ${index}`);
+                        }
+                        continue;
+                    }
                     
                     let module = new ModuleClass();
-                    if (module instanceof Module) this.cached.push(module);
+                    if (module instanceof Module) {
+                        this.cached.push(module);
+                        if (file.includes('water.js')) {
+                            console.log(`[Manager] ⭐ water.js ADDED to cache successfully!`);
+                        }
+                    } else {
+                        if (file.includes('water.js')) {
+                            console.log(`[Manager] ⭐ water.js NOT added - not instance of Module`);
+                        }
+                    }
                 } catch (e: any) {
                     // Suppress common expected errors from modules trying to access browser APIs in main process
                     const errorMsg = e?.toString() || '';
@@ -64,7 +91,12 @@ export default class Manager {
                         errorStack.includes('main.js') ||
                         errorStack.includes('main.ts');
                     
-                    if (!isExpectedError) {
+                    // ALWAYS log water.js errors for debugging
+                    if (file.includes('water.js')) {
+                        console.error(`[ModuleManager] ERROR loading water.js:`, e);
+                        console.error(`[ModuleManager] Error message:`, errorMsg);
+                        console.error(`[ModuleManager] Stack:`, errorStack);
+                    } else if (!isExpectedError) {
                         console.error(`[ModuleManager] Failed to load module from ${path}:`, e);
                     }
                 }

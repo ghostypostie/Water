@@ -1,6 +1,6 @@
 ﻿import Module from '../module/index';
 import ClientOption from './index';
-import { showRestartToast } from '../utils/toast';
+import { showRestartToast, showInstantToast } from '../utils/toast';
 
 export default class TextInput extends ClientOption {
     label: string;
@@ -46,7 +46,13 @@ export default class TextInput extends ClientOption {
 
             this.module.config.set(this.id, value);
             if(this.onChange) this.onChange(value);
-            showRestartToast();
+            
+            // Show appropriate toast based on whether restart is needed
+            if (this.needsRestart) {
+                showRestartToast();
+            } else {
+                showInstantToast();
+            }
         };
 
         container.append(input);

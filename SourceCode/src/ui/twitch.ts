@@ -6,7 +6,7 @@ import Slider from '../options/slider';
 import Dropdown from '../options/dropdown';
 import UI from './index';
 import config from '../config';
-import { showRestartToast } from '../utils/toast';
+import { showInstantToast } from '../utils/toast';
 
 export default class TwitchUI extends UI {
     name = 'Twitch Chat Settings';
@@ -198,9 +198,9 @@ export default class TwitchUI extends UI {
 
         // Bot Username (removed "BOT CREDENTIALS" header)
         const usernameInput = new TextInput(this.module, {
-            name: 'Bot Username',
+            name: 'Twitch Username',
             id: 'twitch.botUsername',
-            description: 'Your Twitch bot account username',
+            description: 'Your Twitch account name',
             label: 'username',
         });
         container.appendChild(usernameInput.generate());
@@ -358,8 +358,8 @@ export default class TwitchUI extends UI {
                     const currentValue = config.get(configKey, defaultValue) as boolean;
                     config.set(configKey, !currentValue);
                     
-                    // Show toast notification for restart
-                    showRestartToast();
+                    // Show toast notification - these settings apply instantly
+                    showInstantToast();
                     
                     renderGrid();
                 });
