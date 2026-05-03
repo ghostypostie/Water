@@ -65,24 +65,31 @@ export default class BetterConsole extends Module {
     }
 
     renderer(): void {
-        window.console = new Proxy(window.console, {
-            set: (target, prop, value) => {
-                if (!['log', 'info', 'error'].includes(prop as string))
-                    return true;
-                return Reflect.set(target, prop, value);
-            },
-            get: (target, prop) => {
-                if (!['log', 'info', 'error'].includes(prop as string))
-                    return Reflect.get(target, prop);
-                return (...args: any[]) => {
-                    try {
-                        ipcRenderer.send('log', prop, ...args);
-                    } catch {}
+        // Store original console methods
+        const originalLog = console.log.bind(console);
+        const originalInfo = console.info.bind(console);
+        const originalError = console.error.bind(console);
 
-                    Reflect.get(target, prop)(...args);
-                    return Reflect.get(target, prop);
-                };
-            },
-        });
+        // Override console methods directly without proxy
+        console.log = (...args: any[]) => {
+            try {
+                ipcRenderer.send('log', 'log', ...args);
+            } catch {}
+            originalLog(...args);
+        };
+
+        console.info = (...args: any[]) => {
+            try {
+                ipcRenderer.send('log', 'info', ...args);
+            } catch {}
+            originalInfo(...args);
+        };
+
+        console.error = (...args: any[]) => {
+            try {
+                ipcRenderer.send('log', 'error', ...args);
+            } catch {}
+            originalError(...args);
+        };
     }
 }

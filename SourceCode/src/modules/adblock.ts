@@ -2,7 +2,7 @@
 import Module from '../module';
 import Checkbox from '../options/checkbox';
 import Manager from '../module/manager';
-import { request } from 'node:https';
+import { request } from 'https';
 
 export default class AdBlock extends Module {
     hostsURL = 'https://blocklistproject.github.io/Lists/ads.txt';
