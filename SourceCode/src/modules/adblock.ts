@@ -60,6 +60,7 @@ export default class AdBlock extends Module {
         "*://user-assets.krunker.io/61821/model.obj*",
         "*://user-assets.krunker.io/61806/model.obj*",
         "*://user-assets.krunker.io/61823/model.obj*",
+        "*://assets.krunker.io/img/death_2_1.png*",
     ];
 
     // Turf War stand blocklist
@@ -75,6 +76,7 @@ export default class AdBlock extends Module {
 
     id = 'adblock';
     name = 'Ad Block';
+    priority = 4;
     options = [
         new Checkbox(this, {
             name: 'Enabled',

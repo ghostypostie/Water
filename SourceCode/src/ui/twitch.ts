@@ -79,6 +79,9 @@ export default class TwitchUI extends UI {
 
         if(!windowHolder || !menuWindow) return;
 
+        // Inject simple pink styles
+        this.injectSimplePinkStyles();
+
         // Clear saved scroll position to start at top
         sessionStorage.removeItem('settings-scroll-position');
 
@@ -128,6 +131,45 @@ export default class TwitchUI extends UI {
                 windowHolder.scrollTop = 0;
             }
         }, 10);
+    }
+
+    injectSimplePinkStyles() {
+        if (document.getElementById('quickplay-simple-pink')) return;
+        
+        const style = document.createElement('style');
+        style.id = 'quickplay-simple-pink';
+        style.textContent = `
+            .quickplay-simple-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                gap: 8px;
+                padding: 12px 0;
+            }
+            
+            .quickplay-simple-item {
+                background: rgba(26, 2, 17, 0.6);
+                border: 1px solid rgba(255, 20, 147, 0.3);
+                color: rgba(240, 196, 230, 0.8);
+                padding: 12px 14px;
+                font-size: 13px;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: none;
+                text-align: center;
+            }
+            
+            .quickplay-simple-item:hover {
+                background: rgba(44, 7, 32, 0.7);
+                border-color: rgba(255, 20, 147, 0.5);
+            }
+            
+            .quickplay-simple-item.is-selected {
+                background: rgba(255, 20, 147, 0.15);
+                border-color: #FF1493;
+                color: #FFE5FA;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     addSectionHeader(holder: HTMLElement, title: string) {
@@ -330,7 +372,7 @@ export default class TwitchUI extends UI {
         holder.appendChild(sectionHeader);
 
         const gridContainer = document.createElement('div');
-        gridContainer.className = 'quickplay-grid';
+        gridContainer.className = 'quickplay-simple-grid';
         
         const renderGrid = () => {
             gridContainer.innerHTML = options.map(option => {
@@ -340,13 +382,13 @@ export default class TwitchUI extends UI {
                 const configKey = `modules.${this.twitchModule.id}.${option.id}`;
                 const isEnabled = config.get(configKey, defaultValue) as boolean;
                 return `
-                    <div class="quickplay-item ${isEnabled ? 'selected' : ''}" data-option="${option.id}">
+                    <div class="quickplay-simple-item ${isEnabled ? 'is-selected' : ''}" data-option="${option.id}">
                         ${option.name}
                     </div>
                 `;
             }).join('');
 
-            gridContainer.querySelectorAll('.quickplay-item').forEach(el => {
+            gridContainer.querySelectorAll('.quickplay-simple-item').forEach(el => {
                 el.addEventListener('click', () => {
                     const optionId = el.getAttribute('data-option');
                     if (!optionId) return;

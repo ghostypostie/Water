@@ -34,6 +34,9 @@ export default class SwitchesUI extends UI {
 
         if(!windowHolder || !menuWindow) return;
 
+        // Inject simple pink styles
+        this.injectSimplePinkStyles();
+
         windowHolder.className = 'popupWin';
         menuWindow.style.width = this.width + 'px';
         menuWindow.className = 'dark';
@@ -57,25 +60,63 @@ export default class SwitchesUI extends UI {
         windowHolder.style.display = '';
     }
 
+    injectSimplePinkStyles() {
+        if (document.getElementById('switches-pink-styles')) return;
+        
+        const style = document.createElement('style');
+        style.id = 'switches-pink-styles';
+        style.textContent = `
+            .switches-simple-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 8px;
+                padding: 12px 0;
+            }
+            
+            .switches-simple-item {
+                background: rgba(26, 2, 17, 0.6);
+                border: 1px solid rgba(255, 20, 147, 0.3);
+                color: rgba(240, 196, 230, 0.8);
+                padding: 12px 16px;
+                font-size: 13px;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: none;
+            }
+            
+            .switches-simple-item:hover {
+                background: rgba(44, 7, 32, 0.7);
+                border-color: rgba(255, 20, 147, 0.5);
+            }
+            
+            .switches-simple-item.is-selected {
+                background: rgba(255, 20, 147, 0.15);
+                border-color: #FF1493;
+                color: #FFE5FA;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     injectGrid(holder: HTMLElement) {
         const module = this.module as Performance;
         const switches = module.switchList;
 
         const gridContainer = document.createElement('div');
-        gridContainer.className = 'quickplay-grid';
+        gridContainer.className = 'switches-simple-grid';
         
         const renderGrid = () => {
             gridContainer.innerHTML = switches.map(switchName => {
                 const isEnabled = config.get('switches.' + switchName, true) as boolean;
                 const displayName = switchName.split('=')[0];
                 return `
-                    <div class="quickplay-item ${isEnabled ? 'selected' : ''}" data-switch="${switchName}">
+                    <div class="switches-simple-item ${isEnabled ? 'is-selected' : ''}" data-switch="${switchName}">
                         ${displayName}
                     </div>
                 `;
             }).join('');
 
-            gridContainer.querySelectorAll('.quickplay-item').forEach(el => {
+            gridContainer.querySelectorAll('.switches-simple-item').forEach(el => {
                 el.addEventListener('click', () => {
                     const switchName = el.getAttribute('data-switch');
                     if (!switchName) return;

@@ -11,6 +11,9 @@ export default class ResourceSwapper extends Module {
     id = 'resourceswapper';
     name = 'Resource Swapper';
     path: string;
+    // PERFORMANCE: Cache file existence checks to avoid repeated file system calls
+    private fileCache = new Map<string, { exists: boolean; timestamp: number }>();
+    private readonly CACHE_TTL = 30000; // 30 seconds
 
     contexts = [
         {
@@ -58,15 +61,32 @@ export default class ResourceSwapper extends Module {
                 (
                     !url.hostname.endsWith('krunker.io') &&
                     !url.hostname.endsWith('browserfps.com')
-                ) ||
-                !existsSync(join(this.path, url.pathname)) ||
-                !statSync(join(this.path, url.pathname)).isFile()
+                )
             )
                 return callback({ cancel: false });
 
-            return callback({
+            // PERFORMANCE: Check cache first before file system
+            const cacheKey = url.pathname;
+            const now = Date.now();
+            const cached = this.fileCache.get(cacheKey);
+            
+            if (cached && (now - cached.timestamp) < this.CACHE_TTL) {
+                // Use cached result
+                return callback(cached.exists ? {
+                    redirectURL: 'client-swapper://' + url.pathname,
+                } : { cancel: false });
+            }
+
+            // Check file system and cache result
+            const fullPath = join(this.path, url.pathname);
+            const exists = existsSync(fullPath) && statSync(fullPath).isFile();
+            
+            // Cache the result
+            this.fileCache.set(cacheKey, { exists, timestamp: now });
+
+            return callback(exists ? {
                 redirectURL: 'client-swapper://' + url.pathname,
-            });
+            } : { cancel: false });
         });
     }
 }

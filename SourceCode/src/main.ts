@@ -3,6 +3,8 @@ import config from './config';
 import { Context, RunAt, fromURL } from './context';
 import ModuleManger from './module/manager';
 import { join } from 'path';
+import { execFile } from 'child_process';
+import * as https from 'https';
 
 // Filter console output to suppress GPU errors (but don't disable GPU itself)
 const originalConsoleError = console.error;
@@ -23,6 +25,79 @@ console.error = (...args: any[]) => {
 // IPC handler for getting user data path
 ipcMain.on('get-user-data-path', (event) => {
     event.returnValue = app.getPath('userData');
+});
+
+// Quick Play region ping system (Tidal scanner)
+const QP_SERVER_MAP: Record<string, string> = {
+    'us-ca-sv': 'SV',
+    'jb-hnd': 'TOK',
+    'de-fra': 'FRA',
+    'as-mb': 'MBI',
+    'au-syd': 'SYD',
+    'sgp': 'SIN',
+    'us-tx': 'DAL',
+    'me-bhn': 'BHN',
+    'brz': 'BRZ',
+    'us-nj': 'NY'
+};
+
+let qpPingCache: Record<string, number> = {};
+let qpPingCacheTime = 0;
+const QP_PING_TTL = 60_000;
+
+function qpOsPing(host: string): Promise<number> {
+    return new Promise((resolve) => {
+        const isWin = process.platform === 'win32';
+        const args = isWin
+            ? ['-n', '1', '-w', '1500', host]
+            : ['-c', '1', '-W', '2', host];
+        execFile('ping', args, { timeout: 3000 }, (err, stdout) => {
+            if (err) { resolve(-1); return; }
+            const match = stdout.match(/time[=<]([\d.]+)\s*ms/i);
+            if (match) resolve(Math.round(parseFloat(match[1])));
+            else resolve(-1);
+        });
+    });
+}
+
+function qpHttpsGet(url: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const req = https.get(url, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => resolve(data));
+        });
+        req.on('error', reject);
+        req.setTimeout(5000, () => req.destroy(new Error('Request timeout')));
+    });
+}
+
+ipcMain.handle('quickplay-ping-regions', async () => {
+    const now = Date.now();
+    if (Object.keys(qpPingCache).length > 0 && now - qpPingCacheTime < QP_PING_TTL) {
+        return qpPingCache;
+    }
+
+    try {
+        const body = await qpHttpsGet('https://matchmaker.krunker.io/ping-list?hostname=krunker.io');
+        const list: Record<string, string> = JSON.parse(body);
+        const out: Record<string, number> = {};
+
+        await Promise.all(Object.keys(list).map(async (key) => {
+            const region = QP_SERVER_MAP[key];
+            if (!region) return;
+            const addr = String(list[key] || '').split(':')[0];
+            if (!addr) { out[region] = -1; return; }
+            out[region] = await qpOsPing(addr);
+        }));
+
+        qpPingCache = out;
+        qpPingCacheTime = now;
+        return out;
+    } catch (e) {
+        console.warn('[Water] quickplay-ping-regions failed:', e);
+        return qpPingCache || {};
+    }
 });
 
 // Keybind cache for instant updates

@@ -220,7 +220,7 @@ async function startClient() {
             return;
         }
         
-        // Add 500ms delay before closing splash screen (reduced from 5000ms)
+        // Minimal delay before closing splash screen for smooth transition
         setTimeout(() => {
             app.on('window-all-closed', (event) => event.preventDefault());
             splashWindow.close();
@@ -228,6 +228,6 @@ async function startClient() {
             app.on('window-all-closed', app.quit.bind(app));
             
             mainWindow.show();
-        }, 500);
+        }, 100); // Reduced from 500ms to 100ms
     });
 }

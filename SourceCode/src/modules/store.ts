@@ -103,6 +103,7 @@ type SupabaseClient = any;
 export default class Store extends Module {
     name = 'Water Store';
     id = 'store';
+    priority = 1;
     
     private marketplaceUI: StoreMarketplaceUI;
     private inventoryUI: StoreInventoryUI;

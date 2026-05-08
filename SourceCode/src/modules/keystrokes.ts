@@ -60,6 +60,9 @@ export default class Keystrokes extends Module {
 
     private rafPending = false;
     private lastVisibilityState = false;
+    // PERFORMANCE: Throttle visibility checks to reduce CPU usage
+    private lastVisibilityCheck = 0;
+    private readonly VISIBILITY_THROTTLE = 200; // ms
 
     applyConfig() {
         let rule = this.stylesheet.sheet.cssRules[0] as CSSStyleRule;
@@ -74,6 +77,11 @@ export default class Keystrokes extends Module {
 
     updateVisibility() {
         if (!this.container) return;
+        
+        // PERFORMANCE: Throttle visibility checks
+        const now = Date.now();
+        if (now - this.lastVisibilityCheck < this.VISIBILITY_THROTTLE) return;
+        this.lastVisibilityCheck = now;
         
         const uiBase = document.getElementById('uiBase');
         if (!uiBase) return;

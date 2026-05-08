@@ -2,6 +2,11 @@ import Module from '../module';
 import { Context, RunAt } from '../context';
 import { waitFor } from '../util';
 import { createLogger } from '../utils/logger';
+import { showToast } from '../utils/toast';
+import config from '../config';
+
+// Node.js type declarations
+declare const require: (id: string) => any;
 
 const logger = {
     log: (...args: any[]) => console.log('[KeybindChanger]', ...args)
@@ -31,7 +36,7 @@ const CLIENT_KEYBINDS: WaterKeybind[] = [
 ];
 
 const WATER_KEYBINDS: WaterKeybind[] = [
-    { id: 'water.quickplay',  name: 'Quick Play',       default: 'F4',  section: 'Water Features' },
+    { id: 'keybinds.quickplay',  name: 'Quick Play',       default: 'F4',  section: 'Water Features' },
 ];
 
 export default class KeybindChanger extends Module {
@@ -48,6 +53,21 @@ export default class KeybindChanger extends Module {
 
     renderer() {
         console.log('[KeybindChanger] renderer() called');
+        
+        // Expose debug function to window
+        (window as any).debugQuickPlayConfig = () => {
+            const config = require('../config').default;
+            console.log('=== Quick Play Config Debug ===');
+            console.log('quickplay.enabled:', config.get('quickplay.enabled'));
+            console.log('quickplay.sortMode:', config.get('quickplay.sortMode'));
+            console.log('quickplay.selectedGamemodes:', config.get('quickplay.selectedGamemodes'));
+            console.log('quickplay.selectedMaps:', config.get('quickplay.selectedMaps'));
+            console.log('quickplay.selectedRegions:', config.get('quickplay.selectedRegions'));
+            console.log('All config keys:', Object.keys(config.store));
+            console.log('Full config store:', config.store);
+            return config.store;
+        };
+        
         this.watchForSettings();
         this.setupGlobalListeners();
     }
@@ -78,12 +98,15 @@ export default class KeybindChanger extends Module {
             }
         });
 
-        // Watch the document body for any changes
-        this.settingsObserver.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        console.log('[KeybindChanger] Observer started on document.body');
+        // Watch only the windowHolder element (much smaller than document.body)
+        const windowHolder = document.getElementById('windowHolder');
+        if (windowHolder) {
+            this.settingsObserver.observe(windowHolder, {
+                childList: true,
+                subtree: true
+            });
+        }
+        console.log('[KeybindChanger] Observer started on windowHolder');
 
         // Also try immediate injection in case settings is already open
         this.injectClientKeybindsSection();
@@ -170,69 +193,21 @@ export default class KeybindChanger extends Module {
     private openKeybindWindow() {
         if (this.isWindowOpen) return;
 
+        // Inject responsive CSS for keybind windows (similar to water windows)
+        this.injectKeybindWindowCSS();
+
         // Create TWO separate windows side by side like Water window (no headers)
         const windowHtml = `
-            <div id="clientKeybindsOverlay" style="
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(0, 0, 0, 0.75);
-                z-index: 1000000;
-                display: block;
-            " onclick="window.keybindChanger?.closeKeybindWindow()">
+            <div id="clientKeybindsOverlay" class="keybind-overlay" onclick="window.keybindChanger?.closeKeybindWindow()">
                 <!-- Left Window: Client Controls -->
-                <div id="clientKeybindsWindowLeft" style="
-                    position: fixed;
-                    top: 50%;
-                    right: calc(50% + 70px);
-                    transform: translateY(-50%);
-                    z-index: 1000001;
-                    width: 750px;
-                    max-width: 47%;
-                    max-height: 85vh;
-                    background-color: #353535;
-                    border-radius: 6px;
-                    padding: 0;
-                    overflow: hidden;
-                    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-                    display: block;
-                " onclick="event.stopPropagation()">
-                    <div style="
-                        padding: 0 20px 20px 20px;
-                        max-height: 85vh;
-                        overflow-y: auto;
-                        scrollbar-width: none;
-                        -ms-overflow-style: none;
-                    ">
+                <div id="clientKeybindsWindowLeft" class="keybind-window keybind-window-left" onclick="event.stopPropagation()">
+                    <div class="keybind-window-content">
                         ${this.renderSection('Client Controls', CLIENT_KEYBINDS)}
                     </div>
                 </div>
                 <!-- Right Window: Water Features -->
-                <div id="clientKeybindsWindowRight" style="
-                    position: fixed;
-                    top: 50%;
-                    left: calc(50% + 70px);
-                    transform: translateY(-50%);
-                    z-index: 1000001;
-                    width: 750px;
-                    max-width: 47%;
-                    max-height: 85vh;
-                    background-color: #353535;
-                    border-radius: 6px;
-                    padding: 0;
-                    overflow: hidden;
-                    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-                    display: block;
-                " onclick="event.stopPropagation()">
-                    <div style="
-                        padding: 0 20px 20px 20px;
-                        max-height: 85vh;
-                        overflow-y: auto;
-                        scrollbar-width: none;
-                        -ms-overflow-style: none;
-                    ">
+                <div id="clientKeybindsWindowRight" class="keybind-window keybind-window-right" onclick="event.stopPropagation()">
+                    <div class="keybind-window-content">
                         ${this.renderSection('Water Features', WATER_KEYBINDS)}
                     </div>
                 </div>
@@ -258,6 +233,146 @@ export default class KeybindChanger extends Module {
         document.addEventListener('keydown', onEscape);
 
         logger.log('Client Keybinds windows opened');
+    }
+
+    private injectKeybindWindowCSS() {
+        // Check if CSS is already injected
+        if (document.getElementById('keybind-window-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'keybind-window-styles';
+        style.textContent = `
+            .keybind-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.75);
+                z-index: 1000000;
+                display: block;
+            }
+            
+            .keybind-window {
+                position: fixed;
+                top: 50%;
+                transform: translateY(-50%);
+                z-index: 1000001;
+                width: 800px;
+                max-width: 45%;
+                max-height: 85vh;
+                background-color: #353535;
+                border-radius: 6px;
+                padding: 0;
+                overflow: hidden;
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+                display: block;
+            }
+            
+            .keybind-window-left {
+                left: 0;
+            }
+            
+            .keybind-window-right {
+                right: 0;
+            }
+            
+            .keybind-window-content {
+                padding: 0 20px 20px 20px;
+                max-height: 85vh;
+                overflow-y: auto;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            
+            .keybind-window-content::-webkit-scrollbar {
+                display: none;
+            }
+            
+            /* Responsive design for lower resolutions */
+            @media (max-width: 1600px) {
+                .keybind-window {
+                    width: 700px;
+                    max-width: 46%;
+                }
+            }
+            
+            @media (max-width: 1400px) {
+                .keybind-window {
+                    width: 600px;
+                    max-width: 47%;
+                }
+            }
+            
+            @media (max-width: 1200px) {
+                .keybind-window {
+                    width: 500px;
+                    max-width: 48%;
+                }
+            }
+            
+            @media (max-width: 1000px) {
+                .keybind-window {
+                    width: 450px;
+                    max-width: 49%;
+                }
+            }
+            
+            @media (max-width: 900px) {
+                .keybind-window {
+                    width: 400px;
+                    max-width: 49.5%;
+                }
+            }
+            
+            /* Stack vertically on very small screens */
+            @media (max-width: 768px) {
+                .keybind-window {
+                    width: 90%;
+                    max-width: 90%;
+                    max-height: 40vh;
+                    left: 50% !important;
+                    right: auto !important;
+                    transform: translate(-50%, -50%);
+                }
+                
+                .keybind-window-left {
+                    top: 10%;
+                }
+                
+                .keybind-window-right {
+                    top: 55%;
+                }
+                
+                .keybind-window-content {
+                    max-height: 40vh;
+                }
+            }
+            
+            /* Extra small screens - single column with more space */
+            @media (max-width: 500px) {
+                .keybind-window {
+                    width: 95%;
+                    max-width: 95%;
+                    max-height: 38vh;
+                }
+                
+                .keybind-window-left {
+                    top: 8%;
+                }
+                
+                .keybind-window-right {
+                    top: 52%;
+                }
+                
+                .keybind-window-content {
+                    max-height: 38vh;
+                    padding: 0 15px 15px 15px;
+                }
+            }
+        `;
+        
+        document.head.appendChild(style);
     }
 
     private closeKeybindWindow() {
@@ -761,40 +876,50 @@ export default class KeybindChanger extends Module {
             const target = e.target as HTMLElement;
             if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
 
-            console.log('[KeybindChanger] Key pressed:', e.key, 'Shift:', e.shiftKey, 'Alt:', e.altKey, 'Ctrl:', e.ctrlKey);
+            console.log('[KeybindChanger] Key pressed:', e.key, 'Code:', e.code, 'Shift:', e.shiftKey, 'Alt:', e.altKey, 'Ctrl:', e.ctrlKey);
+            
+            // Special debug for F4
+            if (e.key === 'F4' || e.code === 'F4') {
+                console.log('[KeybindChanger] ⚠️ F4 DETECTED! Starting keybind check...');
+            }
 
             const all = [...CLIENT_KEYBINDS, ...WATER_KEYBINDS];
 
             for (const kb of all) {
                 const bound = this.getKeybind(kb.id, kb.default);
-                if (!bound) continue;
+                if (!bound) {
+                    console.log('[KeybindChanger] No keybind found for:', kb.id);
+                    continue;
+                }
+
+                console.log('[KeybindChanger] Checking keybind:', kb.id, 'bound.key:', bound.key, 'bound.type:', bound.type);
 
                 let matched = false;
 
                 if (bound.type === 0) {
-                    if (bound.key &&
-                        bound.key.toUpperCase() === e.key.toUpperCase() &&
-                        bound.shift === e.shiftKey &&
-                        bound.alt === e.altKey &&
-                        bound.ctrl === e.ctrlKey) {
+                    const keyMatch = bound.key && bound.key.toUpperCase() === e.key.toUpperCase();
+                    const shiftMatch = bound.shift === e.shiftKey;
+                    const altMatch = bound.alt === e.altKey;
+                    const ctrlMatch = bound.ctrl === e.ctrlKey;
+                    
+                    console.log('[KeybindChanger] Comparison for', kb.id, ':', {
+                        keyMatch,
+                        shiftMatch,
+                        altMatch,
+                        ctrlMatch,
+                        boundKey: bound.key,
+                        eventKey: e.key
+                    });
+                    
+                    if (keyMatch && shiftMatch && altMatch && ctrlMatch) {
                         matched = true;
-                        console.log('[KeybindChanger] Matched keybind:', kb.id, kb.name);
+                        console.log('[KeybindChanger] ✓ MATCHED keybind:', kb.id, kb.name);
                     }
                 }
 
                 if (matched) {
-                    // DYNAMIC LOGIC: Check if this is Quick Play and if it's enabled
-                    if (kb.id === 'water.quickplay') {
-                        const quickPlayEnabled = this.config.get('quickplay.enabled', false);
-                        if (!quickPlayEnabled) {
-                            console.log('[KeybindChanger] Quick Play DISABLED - blocking Quick Play keybind');
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return; // Block ONLY the Quick Play keybind when Quick Play is disabled
-                        }
-                    }
-                    
                     // Execute the keybind action
+                    console.log('[KeybindChanger] Executing keybind:', kb.id);
                     this.executeKeybind(kb.id, e);
                     break;
                 }
@@ -812,17 +937,6 @@ export default class KeybindChanger extends Module {
                 if (!bound) continue;
 
                 if (bound.type === 1 && bound.button === e.button) {
-                    // Check Quick Play logic for mouse buttons too
-                    if (kb.id === 'water.quickplay') {
-                        const quickPlayEnabled = this.config.get('quickplay.enabled', false);
-                        if (!quickPlayEnabled) {
-                            console.log('[KeybindChanger] Quick Play DISABLED - blocking Quick Play keybind');
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return;
-                        }
-                    }
-                    
                     this.executeKeybind(kb.id, e);
                     break;
                 }
@@ -831,30 +945,66 @@ export default class KeybindChanger extends Module {
     }
 
     private executeKeybind(kbId: string, e: Event) {
-        // CLIENT_KEYBINDS are handled by the main process via IPC
+        // CLIENT_KEYBINDS (Client Controls) are handled by the main process via IPC
         // We need to prevent browser default behavior (like F11 fullscreen)
         // but let the event reach the main process
-        if (kbId.startsWith('keybinds.')) {
+        if (kbId.startsWith('keybinds.') && kbId !== 'keybinds.quickplay') {
             console.log('[KeybindChanger] CLIENT_KEYBIND triggered:', kbId);
             e.preventDefault(); // Prevent browser default (F11 fullscreen, F5 refresh, etc.)
             // Don't call stopPropagation() - let it reach main process
             return;
         }
 
-        // WATER_KEYBINDS are handled here in the renderer
+        // WATER_KEYBINDS (Water Features) are handled here in the renderer
         console.log('[KeybindChanger] WATER_KEYBIND triggered:', kbId);
         e.preventDefault();
         e.stopPropagation();
 
         switch (kbId) {
-            case 'water.quickplay':
+            case 'keybinds.quickplay':
+                console.log('[KeybindChanger] Checking Quick Play enabled status...');
+                
+                // Debug: Check all possible config paths
+                console.log('[KeybindChanger] Config debug:');
+                console.log('  - modules.quickplay.quickplay.enabled:', config.get('modules.quickplay.quickplay.enabled', 'NOT_FOUND'));
+                console.log('  - modules.quickplay.enabled:', config.get('modules.quickplay.enabled', 'NOT_FOUND'));
+                console.log('  - quickplay.enabled:', config.get('quickplay.enabled', 'NOT_FOUND'));
+                console.log('  - All config keys:', Object.keys(config.store).filter(k => k.includes('quickplay')));
+                
+                // Use global config, not this.config, because Quick Play module saves to modules.quickplay.quickplay.enabled
+                const quickPlayEnabled = config.get('modules.quickplay.quickplay.enabled', false);
+                console.log('[KeybindChanger] Quick Play keybind pressed, enabled:', quickPlayEnabled);
+                console.log('[KeybindChanger] Type of enabled:', typeof quickPlayEnabled);
+                
+                if (!quickPlayEnabled) {
+                    console.log('[KeybindChanger] Quick Play is DISABLED - showing notification');
+                    this.showQuickPlayDisabledNotification();
+                    return;
+                }
+                
                 console.log('[KeybindChanger] Executing Quick Play');
-                const quickPlayModule = (window as any).manager?.modules?.find((m: any) => m.id === 'quickplay');
+                console.log('[KeybindChanger] window.manager:', (window as any).manager);
+                console.log('[KeybindChanger] window.water:', (window as any).water);
+                
+                const mgr = (window as any).manager;
+                const waterMods = (window as any).water?.modules;
+                const pool = (mgr?.loaded || mgr?.modules || waterMods || []) as any[];
+                
+                console.log('[KeybindChanger] Pool length:', pool.length);
+                console.log('[KeybindChanger] Pool modules:', pool.map((m: any) => m?.id || m?.name || 'unknown'));
+                
+                const quickPlayModule = pool.find((m: any) => m && m.id === 'quickplay');
+                console.log('[KeybindChanger] QuickPlay module found:', !!quickPlayModule);
+                console.log('[KeybindChanger] QuickPlay module:', quickPlayModule);
+                console.log('[KeybindChanger] Has findAndJoinGame:', !!quickPlayModule?.findAndJoinGame);
+                
                 if (quickPlayModule?.findAndJoinGame) {
+                    console.log('[KeybindChanger] Calling findAndJoinGame()...');
                     quickPlayModule.findAndJoinGame();
                     console.log('[KeybindChanger] Quick Play executed');
                 } else {
-                    console.log('[KeybindChanger] QuickPlay module not found');
+                    console.error('[KeybindChanger] QuickPlay module not found or missing findAndJoinGame method');
+                    console.error('[KeybindChanger] Available modules:', pool.map((m: any) => ({ id: m?.id, name: m?.name, methods: Object.keys(m || {}) })));
                 }
                 break;
             default:
@@ -866,13 +1016,6 @@ export default class KeybindChanger extends Module {
         // Get keybind name
         const kb = this.findKeybindDef(kbId);
         if (!kb) return;
-
-        // Get Water module to show toast
-        const waterModule = (window as any).manager?.modules?.find((m: any) => m.id === 'water');
-        if (!waterModule || typeof waterModule.showToast !== 'function') {
-            console.log('[KeybindChanger] Water module not found or showToast not available');
-            return;
-        }
 
         let title = '';
         let message = '';
@@ -887,9 +1030,23 @@ export default class KeybindChanger extends Module {
         } else {
             const keyName = keyObj ? this.formatKeyName(keyObj) : 'unknown';
             title = 'Keybind Updated';
-            message = `${kb.name} → ${keyName} - Ready to use!`;
+            message = `${kb.name} → ${keyName}`;
         }
 
-        waterModule.showToast(title, message, 5000);
+        showToast({
+            title,
+            message,
+            type: 'success',
+            duration: 5000
+        });
+    }
+
+    private showQuickPlayDisabledNotification() {
+        showToast({
+            title: 'Quick Play is Disabled',
+            message: 'Enable Quick Play in Settings to use this feature',
+            type: 'info',
+            duration: 6000
+        });
     }
 }

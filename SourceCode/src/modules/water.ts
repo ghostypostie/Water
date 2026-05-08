@@ -12,6 +12,10 @@ import { performanceMonitor } from './userscript-performance-monitor';
 import { dependencyManager } from './userscript-dependency-manager';
 import { hotReload } from './userscript-hot-reload';
 
+// Node.js type declarations
+declare const __dirname: string;
+declare const require: (id: string) => any;
+
 interface Theme {
     id: string;
     name: string;
@@ -25,6 +29,7 @@ interface UIToggle {
     id: string;
     name: string;
     css: string;
+    js?: string; // Optional JavaScript to execute when toggle is enabled
     defaultOn: boolean;
     requiresRestart?: boolean;
     isModsButton?: boolean;
@@ -56,6 +61,7 @@ export default class Water extends Module {
     private swapperThemesPath: string = '';
     private retryCount: number = 0;
     private maxRetries: number = 10;
+    private eventsRegistered = false;
     
     init() {
         // Set up global water object for module access
@@ -114,9 +120,8 @@ export default class Water extends Module {
         this.localThemesPath = swapperCssPath;
         this.swapperThemesPath = swapperCssPath;
 
-        this.loadUserThemes();
+        // Load local themes once (all three paths point to the same folder)
         this.loadLocalThemes();
-        this.loadSwapperThemes();
 
         const saved = localStorage.getItem('water-active-theme');
         if (saved) this.activeThemeId = saved;
@@ -142,42 +147,45 @@ export default class Water extends Module {
                 console.error('[Water] Error loading purchased scripts:', e);
             });
 
-            // Listen for userscripts updates from cache loader
-            window.addEventListener('userscriptsUpdated', () => {
-                console.log('[Water] Received userscriptsUpdated event, refreshing UI...');
-                this.renderScripts();
-            });
-            
-            // Listen for purchased script reload requests
-            window.addEventListener('reloadPurchasedScript', async (e: any) => {
-                const { scriptName } = e.detail;
-                console.log('[Water] Received reload request for purchased script:', scriptName);
+            // Listen for userscripts updates from cache loader (only once)
+            if (!this.eventsRegistered) {
+                this.eventsRegistered = true;
+                window.addEventListener('userscriptsUpdated', () => {
+                    console.log('[Water] Received userscriptsUpdated event, refreshing UI...');
+                    this.renderScripts();
+                });
                 
-                // Find the script item in Supabase to get its details
-                try {
-                    const storeModule = this.manager?.loaded.find((m: any) => m.id === 'store');
-                    if (!storeModule) return;
+                // Listen for purchased script reload requests
+                window.addEventListener('reloadPurchasedScript', async (e: any) => {
+                    const { scriptName } = e.detail;
+                    console.log('[Water] Received reload request for purchased script:', scriptName);
                     
-                    const supabase = (storeModule as any).supabase;
-                    if (!supabase) return;
-                    
-                    // Get script details
-                    const { data: scripts } = await supabase
-                        .from('premium_items')
-                        .select('id, name, author, description, github_path')
-                        .eq('name', scriptName)
-                        .eq('type', 'userscript')
-                        .limit(1);
-                    
-                    if (scripts && scripts.length > 0) {
-                        await this.loadPurchasedScript(scripts[0]);
-                        this.renderScripts();
-                        console.log('[Water] Successfully reloaded purchased script:', scriptName);
+                    // Find script item in Supabase to get its details
+                    try {
+                        const storeModule = this.manager?.loaded.find((m: any) => m.id === 'store');
+                        if (!storeModule) return;
+                        
+                        const supabase = (storeModule as any).supabase;
+                        if (!supabase) return;
+                        
+                        // Get script details
+                        const { data: scripts } = await supabase
+                            .from('premium_items')
+                            .select('id, name, author, description, github_path')
+                            .eq('name', scriptName)
+                            .eq('type', 'userscript')
+                            .limit(1);
+                        
+                        if (scripts && scripts.length > 0) {
+                            await this.loadPurchasedScript(scripts[0]);
+                            this.renderScripts();
+                            console.log('[Water] Successfully reloaded purchased script:', scriptName);
+                        }
+                    } catch (err) {
+                        console.error('[Water] Failed to reload purchased script:', err);
                     }
-                } catch (err) {
-                    console.error('[Water] Failed to reload purchased script:', err);
-                }
-            });
+                });
+            }
         } else {
             console.log('[Water] Userscripts disabled, clearing any existing scripts');
             su.userscripts = []; // Clear any previously loaded scripts
@@ -656,16 +664,9 @@ export default class Water extends Module {
         }
     }
 
-    renderer(ctx: Context) {
-        // GLOBAL F4 INTERCEPTOR - Log all F4 keypresses to find the source
-        document.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.key === 'F4') {
-                console.log('[GLOBAL F4 INTERCEPTOR] F4 pressed!');
-                console.log('[GLOBAL F4 INTERCEPTOR] altKey:', e.altKey);
-                console.log('[GLOBAL F4 INTERCEPTOR] Stack trace:', new Error().stack);
-            }
-        }, true); // capture phase
+    private listenersAttached = false;
 
+    renderer(ctx: Context) {
         this.injectWaterButtonCSS();
         this.injectWaterButton();
         this.injectCompWaterButton();
@@ -680,14 +681,17 @@ export default class Water extends Module {
 
         modDownloader.init();
         
-        // Add keyboard shortcut for CSS reset (Ctrl + /)
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === '/') {
-                e.preventDefault();
-                this.resetTheme();
-                console.log('[Water] CSS reset via Ctrl+/');
-            }
-        });
+        // Add keyboard shortcut for CSS reset (Ctrl + /) - only once
+        if (!this.listenersAttached) {
+            this.listenersAttached = true;
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === '/') {
+                    e.preventDefault();
+                    this.resetTheme();
+                    console.log('[Water] CSS reset via Ctrl+/');
+                }
+            });
+        }
     }
 
     injectWaterButtonCSS() {
@@ -1354,17 +1358,7 @@ export default class Water extends Module {
             }
 
             if (localList) {
-                // Combine all local theme arrays (they all point to the same path)
-                const allLocalThemes = [
-                    ...this.userThemes,
-                    ...this.localThemes,
-                    ...this.swapperThemes
-                ];
-
-                // Remove duplicates based on filename
-                const uniqueThemes = allLocalThemes.filter((theme, index, self) =>
-                    index === self.findIndex(t => t.filename === theme.filename)
-                );
+                const uniqueThemes = this.localThemes;
 
                 const searchHTML = `
                     <div style="margin-bottom: 12px;">
@@ -1990,7 +1984,8 @@ export default class Water extends Module {
 
                 // Settings
                 const hasSettings = script.settings && Object.keys(script.settings).length > 0;
-                const configArrow = hasSettings ? `
+                const showArrow = hasSettings && isEnabled; // Only show arrow when enabled AND has settings
+                const configArrow = showArrow ? `
                     <span class="material-icons-outlined"
                           id="arrow-${scriptId}"
                           onclick="event.stopPropagation(); window.toggleScriptSettings('${scriptId}')"
@@ -1999,11 +1994,11 @@ export default class Water extends Module {
                           onmouseout="this.style.color='rgba(255,255,255,0.4)'">
                         keyboard_arrow_right
                     </span>
-                ` : '<span style="width:30px;display:inline-block;"></span>';
+                ` : '';
 
                 // Settings dropdown
                 let settingsHTML = '';
-                if (hasSettings) {
+                if (hasSettings && isEnabled) { // Only show settings when enabled
                     const settingsContent = Object.keys(script.settings)
                         .map(key => this.renderSettingControl(key, script.settings[key], script.name))
                         .filter(h => h)
@@ -2036,8 +2031,8 @@ export default class Water extends Module {
                          onmouseover="this.style.background='rgba(255,255,255,0.07)';this.style.borderColor='rgba(255,255,255,0.1)'"
                          onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.06)'">
                         <div style="display:flex;align-items:center;justify-content:space-between;">
-                            <div style="display:flex;align-items:center;flex:1;cursor:${hasSettings ? 'pointer' : 'default'};"
-                                 ${hasSettings ? `onclick="window.toggleScriptSettings('${scriptId}')"` : ''}>
+                            <div style="display:flex;align-items:center;flex:1;cursor:${showArrow ? 'pointer' : 'default'};"
+                                 ${showArrow ? `onclick="window.toggleScriptSettings('${scriptId}')"` : ''}>
                                 ${configArrow}
                                 ${healthDot}
                                 <div style="display:flex;flex-direction:column;min-width:0;">
@@ -2474,13 +2469,20 @@ export default class Water extends Module {
     getUIToggles(): UIToggle[] {
         return [
             { id: 'hideWaterLoader', name: 'Hide Water Loader', css: '', defaultOn: false, requiresRestart: true },
+            { 
+                id: 'hideKPDPhone', 
+                name: 'Hide KPD Phone', 
+                css: '#policePop, #policePopC {display: none !important;}', 
+                defaultOn: true 
+            },
             { id: 'hideAds', name: 'Hide ADs', css: '#mainLogo, #topRightAdHolder, #aHolder, #endAContainer, #bubbleContainer, #homeStoreAd, #newUserGuide, #doubleRaidDropsAd, #battlepassAd, #updateAd, #mainLogoFace, #seasonLabel, #doubleXPHolder, .webpush-container, #krDiscountAd, #surveyAd {display: none !important;}', defaultOn: false },
             { id: 'hideTermsInfo', name: 'Hide Terms Info', css: '#termsInfo {display: none;}', defaultOn: false },
             { id: 'hideSignupAlerts', name: 'Hide Signup Alerts', css: '#signupRewardsButton, .signup-rewards-container, .guest-earned-collect, #notificationCenter {display: none !important;}', defaultOn: true },
             { id: 'showModsButton', name: 'Bring Back Mods Button', css: '', defaultOn: true, isModsButton: true },
             { id: 'hideMoreKrunker', name: 'Hide More Krunker', css: '.menuItem:nth-child(8) {display: none !important;}', defaultOn: true },
+            { id: 'hideChallenges', name: 'Hide Challenges', css: '.menuItem:nth-child(3) {display: none;}', defaultOn: false },
             { id: 'hideSocial', name: 'Hide Social & Trading Button', css: '.menuItem:nth-child(5) {display: none;}', defaultOn: false },
-            { id: 'hideCommunity', name: 'Hide Community Button', css: '.menuItem:nth-child(6) {display: none;}', defaultOn: false },
+            { id: 'hideCommunity', name: 'Hide Community Button', css: '.menuItem:nth-child(6) {display: none;}', defaultOn: true },
             { id: 'hideGames', name: 'Hide Games Button', css: '.menuItem:nth-child(7) {display: none;}', defaultOn: false },
             { id: 'hideStream', name: 'Hide Old & New Stream Container', css: '#streamContainer, #streamContainerNew {display: none !important;}', defaultOn: false },
             { id: 'hideQuickMatch', name: 'Hide Quick Match Button', css: '#menuBtnQuickMatch {display: none !important;}', defaultOn: true },
@@ -2488,7 +2490,9 @@ export default class Water extends Module {
             { id: 'hideTurfWars', name: 'Hide Turf Wars', css: '.main-menu-button-container.svelte-f3amho[style="top: 92px; left: 520px; --border-color:#00B1FF;"] {display: none !important;}', defaultOn: true },
             { id: 'hideNewMarket', name: 'Hide New Market', css: '.main-menu-button-container.svelte-f3amho[style="top: 282px; left: 520px; --border-color:#e39e1d;"] {display: none !important;}', defaultOn: true },
             { id: 'hideRaffles', name: 'Hide Raffles', css: '.main-menu-button-container.svelte-f3amho[style="top: 472px; left: 520px; --border-color:#DC2626;"] {display: none !important;}', defaultOn: true },
-            { id: 'hideDoubleXP', name: 'Hide Double XP', css: '#doubleXPButton {display: none !important;}', defaultOn: true }
+            { id: 'hideDoubleXP', name: 'Hide Double XP', css: '#doubleXPButton {display: none !important;}', defaultOn: true },
+            { id: 'hideStore', name: 'Hide Store', css: '#menuBtnWaterStore {display: none !important;}', defaultOn: false },
+            { id: 'hideExit', name: 'Hide Client Exit', css: '#clientExit {display: none !important;}', defaultOn: true },
         ];
     }
 
@@ -2507,8 +2511,32 @@ export default class Water extends Module {
             toggles.forEach(toggle => {
                 const savedState = localStorage.getItem(`water-ui-${toggle.id}`);
                 const isOn = savedState === null ? toggle.defaultOn : savedState === 'true';
+                
+                // Apply CSS if toggle is enabled
                 if (isOn && toggle.css) {
                     css += toggle.css + '\n';
+                }
+                
+                // Execute JavaScript if toggle is enabled and has JS
+                if (isOn && toggle.js) {
+                    try {
+                        // Execute the JavaScript code
+                        eval(toggle.js);
+                        console.log(`[Water] Executed JS for toggle: ${toggle.id}`);
+                    } catch (jsError) {
+                        console.error(`[Water] JS execution error for ${toggle.id}:`, jsError);
+                    }
+                } else if (!isOn && toggle.js) {
+                    // Clean up when toggle is disabled
+                    // Clear interval if it exists
+                    if (toggle.id === 'hideKPDPhone' && (window as any).waterKPDInterval) {
+                        clearInterval((window as any).waterKPDInterval);
+                        (window as any).waterKPDInterval = null;
+                        // Remove the style element
+                        const kpdStyle = document.getElementById('water-kpd-phone-style');
+                        if (kpdStyle) kpdStyle.remove();
+                        console.log(`[Water] Cleaned up JS for toggle: ${toggle.id}`);
+                    }
                 }
             });
 

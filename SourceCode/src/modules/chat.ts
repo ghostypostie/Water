@@ -44,6 +44,8 @@ export default class Chat extends Module {
     private activeFilters: Set<string> = new Set();
     private chatList: HTMLElement | null = null;
     private commandHint: HTMLElement | null = null;
+    // PERFORMANCE: Cache for color checks to avoid repeated RGB parsing
+    private colorCache = new Map<string, boolean>();
 
     private readonly commands = [
         { cmd: '/players', desc: 'Filter Players Only', col: '#00ff00' },
@@ -209,20 +211,32 @@ export default class Chat extends Module {
         const msgSpan = elem.querySelector('.chatMsg');
         if (msgSpan) {
             const color = window.getComputedStyle(msgSpan).color;
-            // Convert rgb to hex and check if it matches server message colors
-            const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-            if (rgbMatch) {
-                const r = parseInt(rgbMatch[1]);
-                const g = parseInt(rgbMatch[2]);
-                const b = parseInt(rgbMatch[3]);
-                
-                // Check for purple-ish colors (server messages)
-                // #fc03ec = rgb(252, 3, 236) - bright magenta/purple
-                // #aa00ff = rgb(170, 0, 255) - purple
-                // Allow some tolerance for similar colors
-                if (r > 150 && g < 50 && b > 200) {
+            
+            // PERFORMANCE: Check cache first to avoid repeated RGB parsing
+            if (this.colorCache.has(color)) {
+                if (this.colorCache.get(color)) {
                     elem.classList.add('msg--server');
                     return;
+                }
+            } else {
+                // Convert rgb to hex and check if it matches server message colors
+                const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                if (rgbMatch) {
+                    const r = parseInt(rgbMatch[1]);
+                    const g = parseInt(rgbMatch[2]);
+                    const b = parseInt(rgbMatch[3]);
+                    
+                    // Check for purple-ish colors (server messages)
+                    // #fc03ec = rgb(252, 3, 236) - bright magenta/purple
+                    // #aa00ff = rgb(170, 0, 255) - purple
+                    // Allow some tolerance for similar colors
+                    const isServerColor = r > 150 && g < 50 && b > 200;
+                    this.colorCache.set(color, isServerColor); // Cache result
+                    
+                    if (isServerColor) {
+                        elem.classList.add('msg--server');
+                        return;
+                    }
                 }
             }
         }
@@ -366,13 +380,20 @@ export default class Chat extends Module {
 
         this.chatList.appendChild(this.commandHint);
 
+        // PERFORMANCE: Increased debounce from 250ms to 500ms to reduce CPU usage
+        let hintDebounceTimer: ReturnType<typeof setTimeout> | null = null;
         const observer = new MutationObserver(() => {
-            if (this.commandHint && this.chatList && this.commandHint.style.display !== 'none') {
-                const lastChild = this.chatList.lastElementChild;
-                if (lastChild !== this.commandHint) {
+            if (hintDebounceTimer) return;
+            hintDebounceTimer = setTimeout(() => {
+                hintDebounceTimer = null;
+                if (this.commandHint && this.chatList && this.commandHint.style.display !== 'none') {
+                    const lastChild = this.chatList.lastElementChild;
+                    // PERFORMANCE: Skip if already in correct position
+                    if (lastChild === this.commandHint) return;
                     this.chatList.appendChild(this.commandHint);
+                    this.chatList.scrollTop = this.chatList.scrollHeight;
                 }
-            }
+            }, 500); // PERFORMANCE: Increased from 250ms
         });
         observer.observe(this.chatList, { childList: true });
     }
@@ -423,6 +444,12 @@ export default class Chat extends Module {
             }
 
             if (!value.startsWith('/')) {
+                this.hideCommandHint();
+                return;
+            }
+
+            // Allow Krunker's native commands to pass through
+            if (value === '/c' || value === '/ff') {
                 this.hideCommandHint();
                 return;
             }

@@ -21,6 +21,9 @@ class UserscriptPerformanceMonitor {
     private metrics: Map<string, ScriptPerformanceMetrics> = new Map();
     private slowScriptThreshold = 100; // ms
     private memoryWarningThreshold = 10 * 1024 * 1024; // 10MB
+    // PERFORMANCE: Rate limit warnings to reduce console spam
+    private lastWarningTime = new Map<string, number>();
+    private readonly WARNING_COOLDOWN = 5000; // 5 seconds between warnings per script
 
     /**
      * Start measuring script performance
@@ -110,11 +113,18 @@ class UserscriptPerformanceMonitor {
      * Check for performance issues and warn
      */
     private checkPerformanceIssues(script: string, executionTime: number, memoryUsage?: number) {
+        // PERFORMANCE: Rate limit warnings to reduce console overhead
+        const now = Date.now();
+        const lastWarn = this.lastWarningTime.get(script) || 0;
+        
+        if (now - lastWarn < this.WARNING_COOLDOWN) return; // Skip if warned recently
+        
         // Warn about slow scripts
         if (executionTime > this.slowScriptThreshold) {
             console.warn(
                 `[Water] Performance Warning: ${script} took ${executionTime.toFixed(2)}ms to execute (threshold: ${this.slowScriptThreshold}ms)`
             );
+            this.lastWarningTime.set(script, now);
         }
 
         // Warn about high memory usage
@@ -122,6 +132,7 @@ class UserscriptPerformanceMonitor {
             console.warn(
                 `[Water] Memory Warning: ${script} used ${(memoryUsage / 1024 / 1024).toFixed(2)}MB (threshold: ${this.memoryWarningThreshold / 1024 / 1024}MB)`
             );
+            this.lastWarningTime.set(script, now);
         }
     }
 

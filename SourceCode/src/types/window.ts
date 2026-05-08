@@ -8,6 +8,7 @@
         getGameActivity(): any;
         showWindow(id: number): void;
         loginOrRegister(): void;
+        waterKPDInterval?: NodeJS.Timeout;
     }
 }
 

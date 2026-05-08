@@ -18,6 +18,7 @@ interface PremiumScriptMeta {
 export default class PremiumScripts extends Module {
     name = 'Premium Scripts';
     id = 'premium-scripts';
+    priority = 1;
     
     contexts = [
         {

@@ -1,14 +1,16 @@
 {
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "js",
-    "target": "esnext",
-    "moduleResolution": "node",
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "types": ["node"],
-  },
-  "include": ["src/**/*"],
+    "compilerOptions": {
+        "rootDir": "src",
+        "outDir": "js",
+        "target": "esnext",
+        "moduleResolution": "node",
+        "module": "commonjs",
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "types": ["node"]
+    },
+    "include": [
+        "src/**/*"
+    ]
 }

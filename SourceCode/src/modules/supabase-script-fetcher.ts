@@ -7,6 +7,7 @@ import config from '../config';
 export default class SupabaseScriptFetcher extends Module {
     name = 'Supabase Script Fetcher';
     id = 'supabase-script-fetcher';
+    priority = 1;
     options: any[] = [];
     
     contexts = [

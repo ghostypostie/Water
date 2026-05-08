@@ -21,6 +21,8 @@ export default class ClanColorizer extends Module {
 
     private observer: MutationObserver | null = null;
     private isInitialized = false;
+    private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    private pendingNodes: Set<Element> = new Set();
 
     private readonly SELECTORS = [
         '.leaderNameM span',
@@ -56,21 +58,32 @@ export default class ClanColorizer extends Module {
         const txt = (el.textContent || '').trim();
         if (!txt) return;
         
+        // PERFORMANCE: Skip if already colorized with the same content
+        const existingColorized = (el as any).dataset.clanColorized;
+        const existingText = (el as any).dataset.clanText;
+        if (existingColorized && existingText === txt) {
+            return; // Already processed, skip to prevent flickering
+        }
+        
         const color = this.colorForText(txt);
         if (!color) return;
         
-        // Check if it's a gradient
+        // PERFORMANCE: Use cssText for batch style updates (faster than individual setProperty calls)
         if (color.startsWith('linear-gradient')) {
-            el.style.setProperty('background', color, 'important');
-            el.style.setProperty('background-clip', 'text', 'important');
-            el.style.setProperty('-webkit-background-clip', 'text', 'important');
-            el.style.setProperty('-webkit-text-fill-color', 'transparent', 'important');
-            el.style.setProperty('color', 'transparent', 'important');
+            el.style.cssText += `
+                background: ${color} !important;
+                background-clip: text !important;
+                -webkit-background-clip: text !important;
+                -webkit-text-fill-color: transparent !important;
+                color: transparent !important;
+            `;
         } else {
-            el.style.setProperty('color', color, 'important');
+            el.style.cssText += `color: ${color} !important;`;
         }
         
+        // Mark as colorized with both color and text to prevent re-processing
         (el as any).dataset.clanColorized = color;
+        (el as any).dataset.clanText = txt;
     }
 
     private applyColors(root: Document | Element = document): void {
@@ -93,37 +106,52 @@ export default class ClanColorizer extends Module {
 
         try {
             this.observer = new MutationObserver((mutations) => {
-                const nodesToProcess: Element[] = [];
-                
+                // Collect nodes to process, avoiding duplicates with Set
                 for (const mutation of mutations) {
-                    if (mutation.type === 'childList') {
-                        for (const node of mutation.addedNodes) {
-                            if (node.nodeType !== 1) continue;
-                            const el = node as Element;
-                            
-                            if (el.matches && el.matches(this.SELECTORS)) {
-                                nodesToProcess.push(el);
-                            } else if (el.querySelector) {
-                                el.querySelectorAll(this.SELECTORS).forEach((span) => {
-                                    nodesToProcess.push(span);
-                                });
+                    // PERFORMANCE: Only process childList mutations (new elements added)
+                    if (mutation.type !== 'childList') continue;
+                    
+                    for (const node of mutation.addedNodes) {
+                        if (node.nodeType !== 1) continue;
+                        const el = node as Element;
+                        
+                        // PERFORMANCE: Skip if already colorized (check dataset first)
+                        if ((el as any).dataset?.clanColorized) continue;
+                        
+                        if (el.matches && el.matches(this.SELECTORS)) {
+                            // PERFORMANCE: Double-check before adding to pending
+                            if (!(el as any).dataset?.clanColorized) {
+                                this.pendingNodes.add(el);
                             }
-                        }
-                    } else if (mutation.type === 'characterData') {
-                        const parent = mutation.target.parentElement;
-                        if (parent && parent.matches && parent.matches(this.SELECTORS)) {
-                            nodesToProcess.push(parent);
+                        } else if (el.querySelector) {
+                            el.querySelectorAll(this.SELECTORS).forEach((span) => {
+                                // PERFORMANCE: Skip already colorized elements
+                                if (!(span as any).dataset?.clanColorized) {
+                                    this.pendingNodes.add(span);
+                                }
+                            });
                         }
                     }
                 }
                 
-                nodesToProcess.forEach((el) => this.colorElement(el as HTMLElement));
+                // Only process if we have pending nodes
+                if (this.pendingNodes.size === 0) return;
+                
+                // PERFORMANCE: Debounce batch-process all collected nodes after 50ms
+                if (this.debounceTimer) clearTimeout(this.debounceTimer);
+                this.debounceTimer = setTimeout(() => {
+                    this.pendingNodes.forEach((el) => this.colorElement(el as HTMLElement));
+                    this.pendingNodes.clear();
+                    this.debounceTimer = null;
+                }, 50);
             });
 
+            // PERFORMANCE: Only observe childList, NOT attributes or characterData
+            // This prevents re-triggering when we set styles or data attributes
             this.observer.observe(document.body, {
                 childList: true,
                 subtree: true,
-                characterData: true,
+                // REMOVED: attributes, characterData, attributeOldValue
             });
 
             window.addEventListener('unload', this.cleanup.bind(this));
@@ -138,6 +166,11 @@ export default class ClanColorizer extends Module {
             this.observer.disconnect();
             this.observer = null;
         }
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = null;
+        }
+        this.pendingNodes.clear();
         this.isInitialized = false;
         console.log('[ClanColorizer] Cleaned up');
     }

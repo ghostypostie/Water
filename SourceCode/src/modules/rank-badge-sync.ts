@@ -80,6 +80,9 @@ export default class RankBadgeSync extends Module {
 
     
     private injectBadgeIntoItem(item: Element): void {
+        // PERFORMANCE: Early exit if already fully processed
+        if (item.hasAttribute('data-water-badge-processed')) return;
+        
         try {
             const nameEl = item.querySelector('.leaderNameM, .leaderNameF, .leaderName');
             if (!nameEl) return;
@@ -113,6 +116,8 @@ export default class RankBadgeSync extends Module {
                     this.activePlayerBadgeSet = true;
                     item.setAttribute('data-water-badge-locked', 'true');
                 }
+                // PERFORMANCE: Mark as fully processed
+                item.setAttribute('data-water-badge-processed', 'true');
                 return;
             }
 
@@ -136,6 +141,9 @@ export default class RankBadgeSync extends Module {
                 item.setAttribute('data-water-badge-locked', 'true');
                 console.log('[RankBadgeSync] Active player badge locked');
             }
+            
+            // PERFORMANCE: Mark as fully processed
+            item.setAttribute('data-water-badge-processed', 'true');
         } catch (err) {
             console.log('[RankBadgeSync] injectBadgeIntoItem error:', err);
         }

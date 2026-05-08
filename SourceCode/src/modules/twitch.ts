@@ -907,6 +907,61 @@ export default class TwitchChat extends Module {
         return false;
     }
 
+    getLoadedKrunkerMods(): string[] {
+        const loadedMods: string[] = [];
+        
+        // Find the "Reset Mods" button
+        const resetButton = Array.from(document.querySelectorAll('.loadMoreD')).find(
+            el => el.textContent?.includes('Reset Mods')
+        ) as HTMLElement;
+        
+        if (!resetButton) {
+            return loadedMods;
+        }
+        
+        // Get the parent container of the reset button
+        const container = resetButton.parentElement;
+        if (!container) {
+            return loadedMods;
+        }
+        
+        // Find all mapListItem elements in the same container (loaded mods appear above Reset button)
+        const modItems = container.querySelectorAll('.mapListItem');
+        
+        modItems.forEach(item => {
+            // Find the link/text with the mod name
+            const link = item.querySelector('a');
+            if (link && link.textContent) {
+                const modName = link.textContent.trim();
+                if (modName) {
+                    loadedMods.push(modName);
+                }
+            }
+        });
+        
+        return loadedMods;
+    }
+
+    getNukeCount(): number | null {
+        // Find the Nukes stat element
+        const statElements = document.querySelectorAll('.pSt');
+        
+        for (const element of statElements) {
+            if (element.textContent?.includes('Nukes')) {
+                // Extract the number from the <strong> tag
+                const strongTag = element.querySelector('strong');
+                if (strongTag && strongTag.textContent) {
+                    const count = parseInt(strongTag.textContent.trim());
+                    if (!isNaN(count)) {
+                        return count;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
     handleCommand(username: string, message: string, tags: Record<string, string>) {
         const command = message.toLowerCase().trim();
         const args = command.split(' ');
@@ -944,11 +999,9 @@ export default class TwitchChat extends Module {
                 
             case '!nukes':
                 if (!this.config.get('twitch.cmd.nukes', true)) return;
-                const activity = (typeof window.getGameActivity === 'function') 
-                    ? window.getGameActivity() 
-                    : null;
-                if (activity && activity.nukes !== undefined) {
-                    response = `Current nuke count: ${activity.nukes}`;
+                const nukeCount = this.getNukeCount();
+                if (nukeCount !== null) {
+                    response = `Current nuke count: ${nukeCount}`;
                 } else {
                     response = 'Nuke information not available.';
                 }
@@ -961,13 +1014,12 @@ export default class TwitchChat extends Module {
                     response = 'This command is only available to moderators.';
                     break;
                 }
-                // Get active modules from manager
-                const manager = (this as any).manager;
-                if (manager && manager.loaded) {
-                    const modules = manager.loaded.map((m: any) => m.name).join(', ');
-                    response = `Active modules: ${modules}`;
+                // Get loaded Krunker mods from the DOM
+                const loadedMods = this.getLoadedKrunkerMods();
+                if (loadedMods.length > 0) {
+                    response = `Loaded mods: ${loadedMods.join(', ')}`;
                 } else {
-                    response = 'Module information not available.';
+                    response = 'No mods currently loaded.';
                 }
                 break;
                 

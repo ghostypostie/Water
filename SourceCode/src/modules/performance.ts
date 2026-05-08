@@ -30,7 +30,7 @@ class SwitchesButton extends Button {
 export default class Performance extends Module {
     name = 'Performance';
     id = 'performance';
-    priority = 1; // Display at the top of settings
+    priority = 2; // Display at the top of settings
 
     switchList = [
         'renderer-process-limit=100',

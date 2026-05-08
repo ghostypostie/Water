@@ -10,7 +10,7 @@ const logger = createLogger('Display');
 export default class Display extends Module {
     name = 'Display';
     id = 'display';
-    priority = 2; // Display near top of settings
+    priority = 3; // Display near top of settings
 
     options = [
         new Dropdown(this, {
@@ -104,10 +104,8 @@ export default class Display extends Module {
         const mode = this.config.get('mode', 'windowed');
         logger.log('Applying startup display mode:', mode);
         
-        // Delay to ensure window is ready
-        setTimeout(() => {
-            this.changeDisplayMode(mode);
-        }, 500);
+        // PERFORMANCE: Apply immediately, no need for setTimeout delay
+        this.changeDisplayMode(mode);
     }
 
     main() {

@@ -25,6 +25,10 @@ export default class Manager {
     }
 
     listAll(dir = this.directory): Module[] {
+        // Only scan if cache is empty
+        if (this.cached.length > 0) {
+            return this.cached;
+        }
 
         for (let file of readdirSync(dir)) {
             let path = dir + file;
@@ -32,49 +36,20 @@ export default class Manager {
 
             if (stat.isDirectory()) this.cached.push(...this.listAll(path + '/'));
             else {
-                console.log(`[Manager] Loading module file: ${file}`);
-                
-                // Special logging for water.js
-                if (file.includes('water.js')) {
-                    console.log(`[Manager] ⭐ FOUND water.js at path: ${path}`);
-                }
-                
                 try {
                     let required = require(path);
                     let imported = required.default ? required.default : required;
-                    console.log(`[Manager] Imported from ${file}:`, imported?.name || 'unnamed');
-                    
-                    // Special logging for water.js
-                    if (file.includes('water.js')) {
-                        console.log(`[Manager] ⭐ water.js required:`, required);
-                        console.log(`[Manager] ⭐ water.js imported:`, imported);
-                        console.log(`[Manager] ⭐ water.js imported.name:`, imported?.name);
-                        console.log(`[Manager] ⭐ water.js is function?:`, typeof imported === 'function');
-                    }
-                    
                     let ModuleClass = imported;
                     
                     // Skip if no default export or if it's not a constructor
                     if (!ModuleClass || typeof ModuleClass !== 'function') continue;
 
                     let index = this.cached.findIndex(x => x instanceof ModuleClass);
-                    if (index >= 0) {
-                        if (file.includes('water.js')) {
-                            console.log(`[Manager] ⭐ water.js SKIPPED - already in cache at index ${index}`);
-                        }
-                        continue;
-                    }
+                    if (index >= 0) continue;
                     
                     let module = new ModuleClass();
                     if (module instanceof Module) {
                         this.cached.push(module);
-                        if (file.includes('water.js')) {
-                            console.log(`[Manager] ⭐ water.js ADDED to cache successfully!`);
-                        }
-                    } else {
-                        if (file.includes('water.js')) {
-                            console.log(`[Manager] ⭐ water.js NOT added - not instance of Module`);
-                        }
                     }
                 } catch (e: any) {
                     // Suppress common expected errors from modules trying to access browser APIs in main process
@@ -91,12 +66,7 @@ export default class Manager {
                         errorStack.includes('main.js') ||
                         errorStack.includes('main.ts');
                     
-                    // ALWAYS log water.js errors for debugging
-                    if (file.includes('water.js')) {
-                        console.error(`[ModuleManager] ERROR loading water.js:`, e);
-                        console.error(`[ModuleManager] Error message:`, errorMsg);
-                        console.error(`[ModuleManager] Stack:`, errorStack);
-                    } else if (!isExpectedError) {
+                    if (!isExpectedError) {
                         console.error(`[ModuleManager] Failed to load module from ${path}:`, e);
                     }
                 }
@@ -112,15 +82,10 @@ export default class Manager {
         let modules = this.listAll();
         
         // Performance: Filter modules before iteration
-        console.log(`[Manager] Filtering ${modules.length} modules for context=${this.context} runAt=${runAt}`);
         const relevantModules = modules.filter(module => {
-            const matches = module.contexts.findIndex(
+            return module.contexts.findIndex(
                 (ctx) => ctx.context == this.context && ctx.runAt == runAt
             ) !== -1;
-            if (module.name === 'Keybind Changer') {
-                console.log(`[Manager] KeybindChanger contexts:`, module.contexts, 'matches:', matches);
-            }
-            return matches;
         });
         
         // Process modules in chunks to prevent blocking
@@ -143,10 +108,8 @@ export default class Manager {
                     this.context == Context.Startup ||
                     this.context == Context.Common
                 ) {
-                    console.log(`[Manager] Running main() for ${module.name}`);
                     module.main?.();
                 } else {
-                    console.log(`[Manager] Running renderer() for ${module.name} in context ${this.context}`);
                     module.renderer?.(this.context);
                 }
             } catch (moduleError) {
