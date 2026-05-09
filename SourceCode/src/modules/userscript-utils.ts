@@ -179,7 +179,9 @@ export function inferSettingType(
 // Script File Validation
 // ============================================================================
 
-const MAX_SCRIPT_SIZE_BYTES = 1 * 1024 * 1024; // 1 MB
+// Increased from 1 MB so large userscripts with embedded base64 audio/images still load.
+// 25 MB is enough for most userscripts while still blocking accidental huge/binary files.
+const MAX_SCRIPT_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
 
 /**
  * Validate a script file before loading.
@@ -200,7 +202,7 @@ export function validateScriptFile(
 		if (stats.size > MAX_SCRIPT_SIZE_BYTES) {
 			return {
 				valid: false,
-				reason: `File too large (${(stats.size / 1024 / 1024).toFixed(2)} MB). Max allowed: 1 MB`,
+				reason: `File too large (${(stats.size / 1024 / 1024).toFixed(2)} MB). Max allowed: ${(MAX_SCRIPT_SIZE_BYTES / 1024 / 1024).toFixed(0)} MB`,
 			};
 		}
 		if (stats.size === 0) {

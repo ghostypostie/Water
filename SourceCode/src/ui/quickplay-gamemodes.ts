@@ -139,7 +139,7 @@ export default class QuickPlayGamemodesUI extends UI {
     }
 
     private injectGrid(holder: HTMLElement) {
-        let selected = config.get('quickplay.selectedGamemodes', ['*']) as string[];
+        let selected = (config.get('quickplay.selectedGamemodes', this.module.config.get('quickplay.selectedGamemodes', ['*']) as any) as string[]);
 
         // Action buttons
         const actionBar = document.createElement('div');
@@ -160,6 +160,7 @@ export default class QuickPlayGamemodesUI extends UI {
         selectAllBtn.addEventListener('click', () => {
             selected = GAMEMODES.filter(g => g.id !== '*').map(g => g.id);
             config.set('quickplay.selectedGamemodes', selected);
+            this.module.config.set('quickplay.selectedGamemodes', selected);
             renderGrid();
         });
         
@@ -178,6 +179,7 @@ export default class QuickPlayGamemodesUI extends UI {
         clearBtn.addEventListener('click', () => {
             selected = ['*'];
             config.set('quickplay.selectedGamemodes', selected);
+            this.module.config.set('quickplay.selectedGamemodes', selected);
             renderGrid();
         });
         
@@ -196,6 +198,7 @@ export default class QuickPlayGamemodesUI extends UI {
         anyBtn.addEventListener('click', () => {
             selected = ['*'];
             config.set('quickplay.selectedGamemodes', selected);
+            this.module.config.set('quickplay.selectedGamemodes', selected);
             renderGrid();
         });
         
@@ -235,6 +238,7 @@ export default class QuickPlayGamemodesUI extends UI {
                     }
                     
                     config.set('quickplay.selectedGamemodes', selected);
+            this.module.config.set('quickplay.selectedGamemodes', selected);
                     renderGrid();
                 });
             });

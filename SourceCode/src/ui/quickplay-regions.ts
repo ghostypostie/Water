@@ -111,7 +111,7 @@ export default class QuickPlayRegionsUI extends UI {
     }
 
     private injectGrid(holder: HTMLElement) {
-        let selected = config.get('quickplay.selectedRegions', ['*']) as string[];
+        let selected = (config.get('quickplay.selectedRegions', this.module.config.get('quickplay.selectedRegions', ['*']) as any) as string[]);
         let pings: Record<string, number> = {};
 
         // Action buttons
@@ -161,6 +161,7 @@ export default class QuickPlayRegionsUI extends UI {
         selectAllBtn.addEventListener('click', () => {
             selected = REGIONS.filter(r => r.id !== '*').map(r => r.id);
             config.set('quickplay.selectedRegions', selected);
+            this.module.config.set('quickplay.selectedRegions', selected);
             renderGrid();
         });
         
@@ -179,6 +180,7 @@ export default class QuickPlayRegionsUI extends UI {
         clearBtn.addEventListener('click', () => {
             selected = ['*'];
             config.set('quickplay.selectedRegions', selected);
+            this.module.config.set('quickplay.selectedRegions', selected);
             renderGrid();
         });
         
@@ -197,6 +199,7 @@ export default class QuickPlayRegionsUI extends UI {
         anyBtn.addEventListener('click', () => {
             selected = ['*'];
             config.set('quickplay.selectedRegions', selected);
+            this.module.config.set('quickplay.selectedRegions', selected);
             renderGrid();
         });
         
@@ -237,6 +240,7 @@ export default class QuickPlayRegionsUI extends UI {
                     }
                     
                     config.set('quickplay.selectedRegions', selected);
+            this.module.config.set('quickplay.selectedRegions', selected);
                     renderGrid();
                 });
             });

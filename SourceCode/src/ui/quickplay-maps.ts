@@ -153,7 +153,7 @@ export default class QuickPlayMapsUI extends UI {
     }
 
     private injectGrid(holder: HTMLElement) {
-        let selected = config.get('quickplay.selectedMaps', ['*']) as string[];
+        let selected = (config.get('quickplay.selectedMaps', this.module.config.get('quickplay.selectedMaps', ['*']) as any) as string[]);
 
         // Action buttons
         const actionBar = document.createElement('div');
@@ -174,6 +174,7 @@ export default class QuickPlayMapsUI extends UI {
         selectAllBtn.addEventListener('click', () => {
             selected = MAPS.filter(m => m.id !== '*').map(m => m.id);
             config.set('quickplay.selectedMaps', selected);
+            this.module.config.set('quickplay.selectedMaps', selected);
             renderGrid();
         });
         
@@ -192,6 +193,7 @@ export default class QuickPlayMapsUI extends UI {
         clearBtn.addEventListener('click', () => {
             selected = ['*'];
             config.set('quickplay.selectedMaps', selected);
+            this.module.config.set('quickplay.selectedMaps', selected);
             renderGrid();
         });
         
@@ -210,6 +212,7 @@ export default class QuickPlayMapsUI extends UI {
         anyBtn.addEventListener('click', () => {
             selected = ['*'];
             config.set('quickplay.selectedMaps', selected);
+            this.module.config.set('quickplay.selectedMaps', selected);
             renderGrid();
         });
         
@@ -250,6 +253,7 @@ export default class QuickPlayMapsUI extends UI {
                     }
                     
                     config.set('quickplay.selectedMaps', selected);
+            this.module.config.set('quickplay.selectedMaps', selected);
                     renderGrid();
                 });
             });

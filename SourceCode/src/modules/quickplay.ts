@@ -213,17 +213,69 @@ export default class QuickPlay extends Module {
     private selectedMaps: string[] = ['*'];
     private selectedRegions: string[] = ['*'];
 
+    private getSavedSelection(key: string, fallback: string[] = ['*']): string[] {
+        // Older Quick Play UI screens saved selections at the global key
+        // quickplay.selectedRegions / Maps / Gamemodes, while the module runtime
+        // reads module-scoped keys through this.config. Prefer the global UI value
+        // when it exists, then mirror it into the module-scoped key so keybind
+        // Quick Play uses the exact same filters the user selected.
+        const legacy = config.get(key, undefined as any) as any;
+        const scoped = this.config.get(key, fallback) as any;
+        const value = Array.isArray(legacy) ? legacy : (Array.isArray(scoped) ? scoped : fallback);
+        this.config.set(key, value);
+        return value;
+    }
+
+    private normalizeRegion(region: string): string {
+        const r = String(region || '').trim().toUpperCase();
+        const aliases: Record<string, string> = {
+            'US-NJ': 'NY',
+            'NJ': 'NY',
+            'NEW YORK': 'NY',
+            'US-TX': 'DAL',
+            'TX': 'DAL',
+            'DALLAS': 'DAL',
+            'US-CA-SV': 'SV',
+            'SILICON VALLEY': 'SV',
+            'JB-HND': 'TOK',
+            'TOKYO': 'TOK',
+            'DE-FRA': 'FRA',
+            'FRANKFURT': 'FRA',
+            'AS-MB': 'MBI',
+            'MUMBAI': 'MBI',
+            'AU-SYD': 'SYD',
+            'SYDNEY': 'SYD',
+            'SGP': 'SIN',
+            'SINGAPORE': 'SIN',
+            'ME-BHN': 'BHN',
+            'MIDDLE EAST': 'BHN',
+            'BR': 'BRZ',
+            'BRAZIL': 'BRZ'
+        };
+        return aliases[r] || r;
+    }
+
+    private regionAllowed(region: string): boolean {
+        const selected = (this.selectedRegions || ['*']).map(r => this.normalizeRegion(r));
+        if (selected.indexOf('*') >= 0) return true;
+        return selected.indexOf(this.normalizeRegion(region)) >= 0;
+    }
+
+    private pingForRegion(pings: Record<string, number>, region: string): number {
+        return pings[this.normalizeRegion(region)] ?? pings[region] ?? 999;
+    }
+
     private pingCache: Record<string, number> = {};
     private pingCacheTime = 0;
 
     init() {
-        const savedGamemodes = this.config.get('quickplay.selectedGamemodes', ['*']);
-        const savedMaps = this.config.get('quickplay.selectedMaps', ['*']);
-        const savedRegions = this.config.get('quickplay.selectedRegions', ['*']);
+        const savedGamemodes = this.getSavedSelection('quickplay.selectedGamemodes');
+        const savedMaps = this.getSavedSelection('quickplay.selectedMaps');
+        const savedRegions = this.getSavedSelection('quickplay.selectedRegions');
 
-        if (Array.isArray(savedGamemodes)) this.selectedGamemodes = savedGamemodes;
-        if (Array.isArray(savedMaps)) this.selectedMaps = savedMaps;
-        if (Array.isArray(savedRegions)) this.selectedRegions = savedRegions;
+        this.selectedGamemodes = savedGamemodes;
+        this.selectedMaps = savedMaps;
+        this.selectedRegions = savedRegions.map(r => this.normalizeRegion(r));
 
         console.log('[Water] Quick Play (Tidal) ready');
     }
@@ -366,6 +418,15 @@ export default class QuickPlay extends Module {
             // Wait 3 seconds before switching lobby
             await this.delay(3000);
             
+            // Final region guard before switching lobby.
+            if (!this.regionAllowed(verified.region)) {
+                console.warn('[Water] Quick Play blocked region mismatch:', verified.region, this.selectedRegions);
+                this.setOverlayState(overlay, 'empty', 'Region mismatch blocked');
+                await this.delay(1200);
+                this.closeOverlay(overlay);
+                return;
+            }
+
             // Switch lobby immediately (overlay will stay visible during transition)
             (window as any).location.href = `https://krunker.io/?game=${verified.gameID}`;
             
@@ -410,8 +471,7 @@ export default class QuickPlay extends Module {
                          !this.matchesGamemode(lobby.gamemode, lobby.gamemodeIndex)) reason = 'mode';
                 else if (this.selectedMaps.indexOf('*') < 0 &&
                          this.selectedMaps.indexOf(lobby.map) < 0) reason = 'map';
-                else if (this.selectedRegions.indexOf('*') < 0 &&
-                         this.selectedRegions.indexOf(lobby.region) < 0) reason = 'region';
+                else if (!this.regionAllowed(lobby.region)) reason = 'region';
 
                 lobby.passesFilter = reason === null;
                 lobby.rejectReason = reason || undefined;
@@ -432,7 +492,7 @@ export default class QuickPlay extends Module {
                 const playerLimit = raw[3];
                 const meta = raw[4] || {};
                 const remainingTime = raw[5] || 0;
-                const region = String(gameID || '').split(':')[0]?.toUpperCase() || '?';
+                const region = this.normalizeRegion(String(gameID || '').split(':')[0] || '?');
                 const gamemodeIndex = typeof meta.g === 'number' ? meta.g : 0;
                 const gamemode = GAMEMODE_NAMES[gamemodeIndex] || String(gamemodeIndex);
                 return {
@@ -451,7 +511,7 @@ export default class QuickPlay extends Module {
             }
 
             const gameID = raw.id || raw.gameID;
-            const region = (raw.region || String(gameID || '').split(':')[0] || '?').toUpperCase();
+            const region = this.normalizeRegion(raw.region || String(gameID || '').split(':')[0] || '?');
             return {
                 gameID,
                 region,
@@ -475,17 +535,17 @@ export default class QuickPlay extends Module {
         if (mode === 'players') {
             list.sort((a, b) => {
                 if (a.playerCount !== b.playerCount) return b.playerCount - a.playerCount;
-                return (pings[a.region] ?? 999) - (pings[b.region] ?? 999);
+                return this.pingForRegion(pings, a.region) - this.pingForRegion(pings, b.region);
             });
         } else if (mode === 'time') {
             list.sort((a, b) => {
                 if (a.remainingTime !== b.remainingTime) return b.remainingTime - a.remainingTime;
-                return (pings[a.region] ?? 999) - (pings[b.region] ?? 999);
+                return this.pingForRegion(pings, a.region) - this.pingForRegion(pings, b.region);
             });
         } else {
             list.sort((a, b) => {
-                const pa = pings[a.region] ?? 999;
-                const pb = pings[b.region] ?? 999;
+                const pa = this.pingForRegion(pings, a.region);
+                const pb = this.pingForRegion(pings, b.region);
                 if (pa !== pb) return pa - pb;
                 return b.playerCount - a.playerCount;
             });
@@ -497,11 +557,11 @@ export default class QuickPlay extends Module {
         if (sorted.length === 0) return [];
         const head = sorted[0];
         const pool: RawLobby[] = [head];
-        const headPing = pings[head.region] ?? 999;
+        const headPing = this.pingForRegion(pings, head.region);
 
         for (let i = 1; i < sorted.length && pool.length < max; i++) {
             const c = sorted[i];
-            const cp = pings[c.region] ?? 999;
+            const cp = this.pingForRegion(pings, c.region);
             if (mode === 'ping') {
                 if (Math.abs(cp - headPing) <= 25 && Math.abs(c.playerCount - head.playerCount) <= 2) pool.push(c);
             } else if (mode === 'players') {
@@ -522,7 +582,10 @@ export default class QuickPlay extends Module {
             const tryList = [target, ...pool.filter(p => p.gameID !== target.gameID)];
             for (const candidate of tryList) {
                 const live = lookup[candidate.gameID];
-                if (live && live.playerCount < live.playerLimit) return live;
+                // Re-check the live lobby against the active filters, especially region.
+                // Without this, a refreshed lobby could be accepted even if it no longer
+                // matches the user's selected region set.
+                if (live && live.playerCount < live.playerLimit && live.passesFilter && this.regionAllowed(live.region)) return live;
             }
         } catch (e) {
             console.warn('[Water] Verify failed, joining target blindly:', e);
