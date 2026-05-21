@@ -42,6 +42,11 @@ function updater(setTitle: (title: string) => void) {
         // Configure auto-updater
         autoUpdater.autoDownload = true;
         autoUpdater.autoInstallOnAppQuit = true;
+        autoUpdater.allowDowngrade = false;
+        autoUpdater.allowPrerelease = false;
+        
+        // electron-updater will automatically use the publish config from electron-builder.json
+        // No need to call setFeedURL - it reads from app-update.yml in the app resources
         
         // Enable detailed logging
         autoUpdater.logger = {
@@ -52,9 +57,13 @@ function updater(setTitle: (title: string) => void) {
         };
         
         autoUpdater.on('checking-for-update', () => {
+            console.log('[Water] ========================================');
             console.log('[Water] Checking for updates...');
             console.log('[Water] Current version:', app.getVersion());
-            console.log('[Water] Update feed:', 'https://github.com/ghostypostie/Water/releases');
+            console.log('[Water] Platform:', process.platform);
+            console.log('[Water] Arch:', process.arch);
+            console.log('[Water] GitHub repo: https://github.com/ghostypostie/Water/releases');
+            console.log('[Water] ========================================');
             setTitle('Checking for updates...');
         });
 
@@ -88,9 +97,12 @@ function updater(setTitle: (title: string) => void) {
         });
 
         autoUpdater.on('error', (error) => {
+            console.error('[Water] ========================================');
             console.error('[Water] Auto-updater error:', error);
+            console.error('[Water] Error name:', error.name);
             console.error('[Water] Error message:', error.message);
             console.error('[Water] Error stack:', error.stack);
+            console.error('[Water] ========================================');
             setTitle('Update check failed');
             resolve();
         });
@@ -115,11 +127,22 @@ function updater(setTitle: (title: string) => void) {
             console.log('[Water] Arch:', process.arch);
             console.log('[Water] GitHub repo: ghostypostie/Water');
             
-            autoUpdater.checkForUpdates().catch((error) => {
-                console.error('[Water] Failed to check for updates:', error);
-                console.error('[Water] Error details:', error.message);
+            // Set a timeout for the update check (30 seconds)
+            const updateTimeout = setTimeout(() => {
+                console.warn('[Water] Update check timed out after 30 seconds');
                 resolve();
-            });
+            }, 30000);
+            
+            autoUpdater.checkForUpdates()
+                .then(() => {
+                    clearTimeout(updateTimeout);
+                })
+                .catch((error) => {
+                    clearTimeout(updateTimeout);
+                    console.error('[Water] Failed to check for updates:', error);
+                    console.error('[Water] Error details:', error.message);
+                    resolve();
+                });
         } catch (error: any) {
             console.error('[Water] Failed to initialize updater:', error);
             console.error('[Water] Error details:', error.message);

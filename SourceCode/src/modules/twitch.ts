@@ -29,13 +29,11 @@ export default class TwitchChat extends Module {
         new TextInput(this, {
             name: 'Channel Name',
             id: 'channel',
-            description: 'Enter a Twitch channel name to display its chat in Krunker',
             label: 'Channel Name',
         }),
         new Dropdown(this, {
             name: 'Connection Mode',
             id: 'connectionMode',
-            description: 'Anonymous (read-only) or OAuth (can send messages)',
             defaultValue: 'anonymous',
             options: [
                 { name: 'Anonymous (Read Only)', value: 'anonymous' },
@@ -57,7 +55,6 @@ export default class TwitchChat extends Module {
         new Slider(this, {
             name: 'Panel Height',
             id: 'panelHeight',
-            description: 'Height of the Twitch chat panel in pixels',
             defaultValue: 250,
             min: 100,
             max: 500,
@@ -66,7 +63,6 @@ export default class TwitchChat extends Module {
         new Slider(this, {
             name: 'Panel Opacity',
             id: 'panelOpacity',
-            description: 'Background opacity of the Twitch chat panel (%)',
             defaultValue: 40,
             min: 0,
             max: 100,
@@ -75,7 +71,6 @@ export default class TwitchChat extends Module {
         new Slider(this, {
             name: 'Font Size',
             id: 'fontSize',
-            description: 'Text size for Twitch chat messages',
             defaultValue: 14,
             min: 10,
             max: 20,
@@ -84,7 +79,6 @@ export default class TwitchChat extends Module {
         new Slider(this, {
             name: 'Message Timeout',
             id: 'messageTimeout',
-            description: 'Time before messages disappear (minutes). 0 = never',
             defaultValue: 0,
             min: 0,
             max: 3,
@@ -92,7 +86,6 @@ export default class TwitchChat extends Module {
         }),
         new Button(this, {
             name: 'Twitch Settings',
-            description: 'Configure bot credentials, commands, display and notifications',
             id: '',
             label: 'Edit',
             onChange: this.twitchUI.open.bind(this.twitchUI),

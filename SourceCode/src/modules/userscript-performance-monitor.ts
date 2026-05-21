@@ -5,7 +5,7 @@
 
 export interface ScriptPerformanceMetrics {
     script: string;
-    scriptType: 'local' | 'premium' | 'bundled';
+    scriptType: 'local' | 'premium';
     loadTime: number; // Time to load dependencies
     executionTime: number; // Time to execute script
     memoryUsage?: number; // Memory delta in bytes
@@ -28,7 +28,7 @@ class UserscriptPerformanceMonitor {
     /**
      * Start measuring script performance
      */
-    startMeasure(script: string, scriptType: 'local' | 'premium' | 'bundled'): () => void {
+    startMeasure(script: string, scriptType: 'local' | 'premium'): () => void {
         const startTime = performance.now();
         const startMemory = (performance as any).memory?.usedJSHeapSize;
 
@@ -47,7 +47,7 @@ class UserscriptPerformanceMonitor {
      */
     private recordMetrics(
         script: string,
-        scriptType: 'local' | 'premium' | 'bundled',
+        scriptType: 'local' | 'premium',
         executionTime: number,
         memoryUsage?: number
     ) {

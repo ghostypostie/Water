@@ -1,7 +1,7 @@
 /**
  * Water Client userscript loader
  * Executes userscripts in renderer context with proper timing and context
- * Supports: Local scripts, Premium scripts, Bundled scripts
+ * Supports: Local scripts, Premium scripts
  * 
  * Upgrade v2: Smart config detection, document-idle, file validation,
  *             orphan cleanup, storage quotas, enhanced GM_info
@@ -56,7 +56,7 @@ export class Userscript {
     runAt: string = 'document-end';
     priority: number = 0;
     content: string;
-    scriptType: 'local' | 'premium' | 'bundled' = 'local';
+    scriptType: 'local' | 'premium' = 'local';
     dependencies: string[] = [];
     dependenciesLoaded: boolean = false;
 

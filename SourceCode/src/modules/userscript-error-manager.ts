@@ -1,6 +1,6 @@
 /**
  * Water Client - Userscript Error Manager (v2)
- * Handles errors from all script types (local, premium, bundled)
+ * Handles errors from all script types (local, premium)
  * 
  * Upgrade v2: Auto-disable on crash loops, error classification,
  *             error count badges, stack trace cleanup
@@ -16,7 +16,7 @@ export type ErrorCategory = 'syntax' | 'runtime' | 'dependency' | 'timeout' | 'u
 
 export interface ScriptError {
     script: string;
-    scriptType: 'local' | 'premium' | 'bundled';
+    scriptType: 'local' | 'premium';
     error: Error;
     timestamp: Date;
     stack?: string;
@@ -117,7 +117,7 @@ class UserscriptErrorManager {
             .join('\n');
     }
 
-    logError(script: string, scriptType: 'local' | 'premium' | 'bundled', error: Error) {
+    logError(script: string, scriptType: 'local' | 'premium', error: Error) {
         const category = this.classifyError(error);
         const cleanedStack = this.cleanStackTrace(error.stack, script);
 
@@ -153,7 +153,7 @@ class UserscriptErrorManager {
     /**
      * Track error frequency and auto-disable scripts that crash too often
      */
-    private trackAndAutoDisable(script: string, scriptType: 'local' | 'premium' | 'bundled') {
+    private trackAndAutoDisable(script: string, scriptType: 'local' | 'premium') {
         const now = Date.now();
         const timestamps = this.recentErrorTimestamps.get(script) || [];
 
@@ -179,7 +179,7 @@ class UserscriptErrorManager {
 
             // Persist the disable state via config if available
             try {
-                const namespace = scriptType === 'premium' ? 'purchased' : scriptType;
+                const namespace = scriptType === 'premium' ? 'purchased' : 'local';
                 // Dispatch event so water.ts can update config
                 window.dispatchEvent(new CustomEvent('userscript-auto-disabled', {
                     detail: { script, namespace }
@@ -193,8 +193,7 @@ class UserscriptErrorManager {
     private showErrorNotification(scriptError: ScriptError) {
         const typeLabel = {
             local: 'Local',
-            premium: 'Premium',
-            bundled: 'Bundled'
+            premium: 'Premium'
         }[scriptError.scriptType];
 
         const categoryLabel = {
@@ -248,7 +247,7 @@ class UserscriptErrorManager {
         return this.errors.filter(e => e.script === script);
     }
 
-    getErrorsByType(scriptType: 'local' | 'premium' | 'bundled'): ScriptError[] {
+    getErrorsByType(scriptType: 'local' | 'premium'): ScriptError[] {
         return this.errors.filter(e => e.scriptType === scriptType);
     }
 

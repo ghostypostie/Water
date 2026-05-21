@@ -10,7 +10,6 @@ export default class Slider extends ClientOption {
     constructor(module: Module, opts: {
         name: string,
         id: string,
-        description: string,
         needsRefresh?: boolean,
         needsRestart?: boolean,
         defaultValue?: any,
@@ -19,6 +18,7 @@ export default class Slider extends ClientOption {
         min?: number,
         max?: number,
         step?: number,
+        description?: string,
     }) {
         super(module, opts);
     

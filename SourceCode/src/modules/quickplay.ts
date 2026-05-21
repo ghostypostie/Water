@@ -121,21 +121,18 @@ export default class QuickPlay extends Module {
         new Checkbox(this, {
             id: 'quickplay.enabled',
             name: 'Enable Quick Play',
-            description: 'Drop into the deepest lobby that fits your filters when the Quick Play key is pressed',
             defaultValue: false,
             needsRestart: true
         }),
         new Dropdown(this, {
             id: 'quickplay.sortMode',
             name: 'Sort Method',
-            description: 'How to rank candidate lobbies before diving in',
             defaultValue: 'ping',
             options: SORT_MODES
         }),
         new Slider(this, {
             id: 'quickplay.minTime',
             name: 'Minimum Time (minutes)',
-            description: 'Reject any lobby with less time remaining',
             defaultValue: 2,
             min: 0,
             max: 4,
@@ -144,7 +141,6 @@ export default class QuickPlay extends Module {
         new Slider(this, {
             id: 'quickplay.minPlayers',
             name: 'Minimum Players',
-            description: 'Skip ghost lobbies below this count',
             defaultValue: 0,
             min: 0,
             max: 10,
@@ -153,7 +149,6 @@ export default class QuickPlay extends Module {
         new Slider(this, {
             id: 'quickplay.maxPlayers',
             name: 'Maximum Players',
-            description: 'Avoid lobbies more crowded than this',
             defaultValue: 8,
             min: 1,
             max: 10,
@@ -162,7 +157,6 @@ export default class QuickPlay extends Module {
         new Slider(this, {
             id: 'quickplay.poolSize',
             name: 'Pool Size',
-            description: 'Pick randomly from the top N candidates for variance',
             defaultValue: 3,
             min: 1,
             max: 8,
@@ -171,39 +165,33 @@ export default class QuickPlay extends Module {
         new Checkbox(this, {
             id: 'quickplay.allowCustoms',
             name: 'Allow Custom Games',
-            description: 'Include user-hosted custom lobbies',
             defaultValue: false
         }),
         new Checkbox(this, {
             id: 'quickplay.allowOfficialCustoms',
             name: 'Allow Official Customs',
-            description: 'Include official featured custom lobbies',
             defaultValue: false
         }),
         new Checkbox(this, {
             id: 'quickplay.fallbackBrowser',
             name: 'Fallback to Server Browser',
-            description: 'Open the server browser if no lobby passes the filter',
             defaultValue: true
         }),
         new Button(this, {
             id: 'quickplay.gamemodes',
             name: 'Gamemodes',
-            description: 'Choose which game modes are eligible',
             label: 'Configure',
             onChange: () => this.gamemodesUI.open()
         }),
         new Button(this, {
             id: 'quickplay.maps',
             name: 'Maps',
-            description: 'Choose which maps are eligible',
             label: 'Configure',
             onChange: () => this.mapsUI.open()
         }),
         new Button(this, {
             id: 'quickplay.regions',
             name: 'Regions',
-            description: 'Choose which regions are eligible',
             label: 'Configure',
             onChange: () => this.regionsUI.open()
         })

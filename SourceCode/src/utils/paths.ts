@@ -1,5 +1,5 @@
-import { join, normalize, sep } from 'path';
-import { existsSync, readdirSync, copyFileSync, mkdirSync } from 'fs';
+import { join, normalize } from 'path';
+import { existsSync, readdirSync } from 'fs';
 import { app } from 'electron';
 
 /**
@@ -20,6 +20,13 @@ function countFiles(path: string): number {
  * Get the application resources path (works in both dev and production, all platforms)
  */
 function getAppResourcesPath(): string {
+    // Check if app is available (renderer process might not have access)
+    if (!app || typeof app.getAppPath !== 'function') {
+        console.warn('[Water] app.getAppPath not available, using __dirname fallback');
+        // Fallback to __dirname (works in renderer process)
+        return join(__dirname, '../..');
+    }
+    
     // In production (packaged app), app.getAppPath() returns the asar path
     // In development, it returns the project root
     const appPath = app.getAppPath();
@@ -32,80 +39,6 @@ function getAppResourcesPath(): string {
     } else {
         // In development: appPath is the project root
         return appPath;
-    }
-}
-
-/**
- * Copy bundled scripts from assets to user's Scripts folder
- * Only copies if the file doesn't already exist (won't overwrite user modifications)
- * Cross-platform compatible (Windows, macOS, Linux)
- */
-export function copyBundledScripts(userScriptsPath: string): void {
-    try {
-        console.log('[Water] copyBundledScripts called with path:', userScriptsPath);
-        console.log('[Water] Platform:', process.platform);
-        
-        // Ensure user scripts directory exists
-        if (!existsSync(userScriptsPath)) {
-            mkdirSync(userScriptsPath, { recursive: true });
-            console.log('[Water] Created Scripts directory:', userScriptsPath);
-        }
-
-        // Get the app resources path (cross-platform)
-        const appPath = getAppResourcesPath();
-        console.log('[Water] App path:', appPath);
-        
-        // Build path to bundled scripts using platform-appropriate separators
-        const bundledScriptsPath = normalize(join(appPath, 'assets', 'scripts'));
-        
-        console.log('[Water] Looking for bundled scripts at:', bundledScriptsPath);
-        console.log('[Water] Checking if path exists...');
-        
-        // If bundled scripts folder doesn't exist, skip (not included in this build)
-        if (!existsSync(bundledScriptsPath)) {
-            console.log('[Water] No bundled scripts folder found at:', bundledScriptsPath);
-            console.log('[Water] This is normal for public builds without bundled scripts');
-            return;
-        }
-
-        console.log('[Water] Bundled scripts folder exists! Reading directory...');
-
-        // Read all .js files from bundled scripts
-        const bundledScripts = readdirSync(bundledScriptsPath, { withFileTypes: true })
-            .filter(entry => entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.user.js')));
-
-        if (bundledScripts.length === 0) {
-            console.log('[Water] No .js files found in bundled scripts folder');
-            return;
-        }
-
-        console.log(`[Water] Found ${bundledScripts.length} bundled scripts:`, bundledScripts.map(s => s.name));
-
-        // Copy each script if it doesn't exist
-        for (const script of bundledScripts) {
-            const sourcePath = normalize(join(bundledScriptsPath, script.name));
-            const destPath = normalize(join(userScriptsPath, script.name));
-
-            console.log(`[Water] Processing ${script.name}...`);
-            console.log(`[Water]   Source: ${sourcePath}`);
-            console.log(`[Water]   Dest: ${destPath}`);
-
-            if (existsSync(destPath)) {
-                console.log(`[Water] Skipping ${script.name} (already exists)`);
-                continue;
-            }
-
-            try {
-                copyFileSync(sourcePath, destPath);
-                console.log(`[Water] ✓ Successfully copied bundled script: ${script.name}`);
-            } catch (err) {
-                console.error(`[Water] ✗ Failed to copy ${script.name}:`, err);
-            }
-        }
-        
-        console.log('[Water] Finished copying bundled scripts');
-    } catch (err) {
-        console.error('[Water] Error in copyBundledScripts:', err);
     }
 }
 

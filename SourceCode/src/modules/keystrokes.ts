@@ -20,22 +20,18 @@ export default class Keystrokes extends Module {
         new Checkbox(this, {
             name: 'Enabled',
             id: 'enabled',
-            description: 'Show keystrokes'
         }),
         new Slider(this, {
             name: 'X Position',
             id: 'x',
-            description: 'How far to the left or right the keystrokes should be',
         }),
         new Slider(this, {
             name: 'Y Position',
             id: 'y',
-            description: 'How far up or down the keystrokes should be',
         }),
         new Slider(this, {
             name: 'Scale',
             id: 'scale',
-            description: 'The size of the keystrokes',
 
             min: 0.1,
             max: 3,

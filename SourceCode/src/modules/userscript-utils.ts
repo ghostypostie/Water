@@ -294,17 +294,14 @@ export function cleanOrphanSettings(
 
 /**
  * Determine the storage namespace for a script.
- * Returns 'local' | 'purchased' | 'bundled'.
+ * Returns 'local' | 'purchased'.
  */
 export function getScriptNamespace(script: {
 	fullpath?: string;
 	scriptType?: string;
-}): 'local' | 'purchased' | 'bundled' {
+}): 'local' | 'purchased' {
 	if (script.scriptType === 'premium' || (script.fullpath && script.fullpath.startsWith('[PURCHASED]'))) {
 		return 'purchased';
-	}
-	if (script.scriptType === 'bundled') {
-		return 'bundled';
 	}
 	return 'local';
 }

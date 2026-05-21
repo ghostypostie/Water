@@ -3,7 +3,7 @@ import Module from '../module';
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { shell } from 'electron';
-import { getSwapPath, getScriptsPath, copyBundledScripts } from '../utils/paths';
+import { getSwapPath, getScriptsPath } from '../utils/paths';
 import { initializeUserscripts, su } from './userscript-loader';
 import { modDownloader } from './mod-downloader';
 import config from '../config';
@@ -33,6 +33,7 @@ interface UIToggle {
     defaultOn: boolean;
     requiresRestart?: boolean;
     isModsButton?: boolean;
+    hidden?: boolean; // If true, toggle is not shown in UI but still applies CSS
 }
 
 export default class Water extends Module {
@@ -113,9 +114,6 @@ export default class Water extends Module {
             console.error('[Water] Failed to create Water folders:', e);
         }
 
-        // Copy bundled scripts (like SkyColor) to user's Scripts folder
-        copyBundledScripts(userscriptsPath);
-        
         this.userCSSPath = swapperCssPath;
         this.localThemesPath = swapperCssPath;
         this.swapperThemesPath = swapperCssPath;
@@ -695,36 +693,72 @@ export default class Water extends Module {
     }
 
     injectWaterButtonCSS() {
-        // Water button now uses default Krunker menu item styling
-        // No custom CSS needed
+        if (document.getElementById('water-bpitem-style')) return;
+        const style = document.createElement('style');
+        style.id = 'water-bpitem-style';
+        style.textContent = `
+            #waterBtn.bpItem {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                gap: 14px;
+                pointer-events: all;
+                cursor: pointer;
+                transition: transform 0.15s ease;
+                padding: 4px 0;
+            }
+            #waterBtn.bpItem:hover { transform: translateX(6px); }
+            #waterBtn.bpItem:active { transform: translateX(6px) scale(0.97); }
+            #waterBtn .waterBpLogo {
+                width: 38px;
+                height: 38px;
+                object-fit: contain;
+                flex-shrink: 0;
+            }
+            #waterBtn .waterBpInfo {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            #waterBtn .waterBpInfo .waterBpTitle {
+                font-size: 26px;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                line-height: 1.1;
+                white-space: nowrap;
+                color: #fff;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     injectWaterButton() {
         const doInject = () => {
             try {
-                const menuContainer = document.getElementById('menuItemContainer');
-                if (!menuContainer) {
-                    return false;
-                }
+                if (document.getElementById('waterBtn')) return true;
 
-                if (document.getElementById('waterBtn')) {
-                    return true;
-                }
+                this.injectWaterButtonCSS();
 
                 const btn = document.createElement('div');
                 btn.id = 'waterBtn';
-                btn.className = 'menuItem';
-                btn.setAttribute('onmouseenter', 'playTick()');
+                btn.className = 'menuItem bpItem';
+                btn.setAttribute('role', 'button');
+                btn.setAttribute('tabindex', '0');
                 btn.onclick = () => {
                     if (typeof (window as any).playSelect === 'function') (window as any).playSelect();
                     this.openWaterWindow();
                 };
 
+                const menuContainer = document.getElementById('menuItemContainer');
+                if (!menuContainer) return false;
+                btn.setAttribute('onmouseenter', 'playTick()');
                 btn.innerHTML = `
-                    <span class="material-icons-outlined menBtnIcn" style="color:#ff69b4;font-size:70px!important">water_drop</span>
-                    <div class="menuItemTitle" style="font-size:13px">Water</div>
+                    <img class="waterBpLogo" src="https://i.postimg.cc/tgKkbLyH/water.webp" alt="Water">
+                    <div class="waterBpInfo">
+                        <div class="waterBpTitle">Water</div>
+                    </div>
                 `;
-
                 menuContainer.insertBefore(btn, menuContainer.firstChild);
 
                 this.injectModsButton();
@@ -738,35 +772,24 @@ export default class Water extends Module {
         if (doInject()) return;
 
         let attempts = 0;
-        const retry = () => {
+        const retryInterval = setInterval(() => {
             attempts++;
-            if (attempts > 30) {
-                console.error('[Water] Failed to inject button after 30 attempts');
+            if (attempts > 60) {
+                clearInterval(retryInterval);
                 return;
             }
-            if (!doInject()) {
-                setTimeout(retry, 500);
-            }
-        };
-        setTimeout(retry, 500);
-
-        const observer = new MutationObserver(() => {
-            if (!document.getElementById('waterBtn')) {
-                const menuContainer = document.getElementById('menuItemContainer');
-                if (menuContainer && menuContainer.children.length > 0) {
-                    doInject();
-                }
-            }
-        });
-
-        const watchForContainer = setInterval(() => {
-            const menuContainer = document.getElementById('menuItemContainer');
-            if (menuContainer) {
-                clearInterval(watchForContainer);
-                console.log('[Water] Starting to observe menu container');
-                observer.observe(menuContainer, { childList: true });
+            if (doInject()) {
+                clearInterval(retryInterval);
             }
         }, 500);
+
+        // Watch body for Svelte re-renders that remove injected elements
+        const bodyObserver = new MutationObserver(() => {
+            if (!document.getElementById('waterBtn')) {
+                doInject();
+            }
+        });
+        bodyObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     injectModsButton() {
@@ -780,14 +803,21 @@ export default class Water extends Module {
                 return;
             }
 
-            const menuContainer = document.getElementById('menuItemContainer');
-            if (!menuContainer) return;
+            // Use menuItemContainer
+            this.injectModsButtonLegacy();
+        } catch (e) {
+            console.error('[Water] Mods button inject error:', e);
+        }
+    }
 
-            if (document.getElementById('modsBtn')) return;
+    injectModsButtonLegacy() {
+        try {
+            const menuContainer = document.getElementById('menuItemContainer');
+            if (!menuContainer || document.getElementById('modsBtn')) return;
 
             const modsBtn = document.createElement('div');
             modsBtn.id = 'modsBtn';
-            modsBtn.className = 'menuItem';
+            modsBtn.className = 'menuItem svelte-fgmdj8';
             modsBtn.setAttribute('onmouseenter', 'playTick()');
             modsBtn.onclick = () => {
                 if (typeof (window as any).playSelect === 'function') (window as any).playSelect();
@@ -797,8 +827,8 @@ export default class Water extends Module {
             };
 
             modsBtn.innerHTML = `
-                <span class="material-icons-outlined menBtnIcn" style="color:#4CAF50; font-size: 76px;">color_lens</span>
-                <div class="menuItemTitle">Mods</div>
+                <span class="material-icons-outlined menuItemIcon svelte-fgmdj8">color_lens</span>
+                <div class="menuItemTitle svelte-fgmdj8">Mods</div>
             `;
 
             const menuItems = menuContainer.children;
@@ -817,7 +847,7 @@ export default class Water extends Module {
                 menuContainer.appendChild(modsBtn);
             }
 
-            console.log('[Water] Mods button injected successfully');
+            console.log('[Water] Mods button injected successfully (legacy)');
         } catch (e) {
             console.error('[Water] Mods button inject error:', e);
         }
@@ -1316,6 +1346,7 @@ export default class Water extends Module {
                 background: #1a1a2e;
                 color: #fff;
             }
+            
         `;
     }
 
@@ -1964,8 +1995,6 @@ export default class Water extends Module {
                 let badgeHTML = '';
                 if (isPurchased || script.scriptType === 'premium') {
                     badgeHTML = '<span style="display:inline-block;padding:2px 6px;font-size:9px;font-weight:700;border-radius:3px;background:linear-gradient(135deg,#ff69b4,#ff1493);color:#fff;margin-left:8px;letter-spacing:0.5px;">STORE</span>';
-                } else if (script.scriptType === 'bundled') {
-                    badgeHTML = '<span style="display:inline-block;padding:2px 6px;font-size:9px;font-weight:700;border-radius:3px;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);margin-left:8px;letter-spacing:0.5px;">BUNDLED</span>';
                 } else {
                     badgeHTML = '<span style="display:inline-block;padding:2px 6px;font-size:9px;font-weight:700;border-radius:3px;background:rgba(59,130,246,0.2);color:#60a5fa;margin-left:8px;letter-spacing:0.5px;">LOCAL</span>';
                 }
@@ -2412,7 +2441,23 @@ export default class Water extends Module {
                 </div>
             `;
 
-            const togglesHTML = toggles.map(toggle => {
+            // Mode toggle as first item (special styling)
+            const savedMode = localStorage.getItem('water_mode') || 'ranked';
+            const modeToggleHTML = `
+                <div class="settNameSmall script-item water-ui-toggle-item" data-toggle-name="mode pugs ranked" style="margin-bottom: 8px;">
+                    <span class="script-name">Mode: PUGs / Ranked</span>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-left: 10px;">
+                        <span style="color: ${savedMode === 'pugs' ? '#ff69b4' : 'rgba(255,255,255,0.5)'}; font-size: 11px; font-weight: ${savedMode === 'pugs' ? 'bold' : 'normal'}; transition: all 0.3s;" id="mode-label-pugs">PUGs</span>
+                        <label class="switch">
+                            <input type="checkbox" id="water-mode-checkbox" ${savedMode === 'ranked' ? 'checked' : ''} onchange="window.toggleWaterMode(this.checked)">
+                            <span class="slider"><span class="grooves"></span></span>
+                        </label>
+                        <span style="color: ${savedMode === 'ranked' ? '#ff69b4' : 'rgba(255,255,255,0.5)'}; font-size: 11px; font-weight: ${savedMode === 'ranked' ? 'bold' : 'normal'}; transition: all 0.3s;" id="mode-label-ranked">Ranked</span>
+                    </div>
+                </div>
+            `;
+
+            const togglesHTML = toggles.filter(toggle => !toggle.hidden).map(toggle => {
                 const savedState = localStorage.getItem(`water-ui-${toggle.id}`);
                 const isOn = savedState === null ? toggle.defaultOn : savedState === 'true';
 
@@ -2429,7 +2474,7 @@ export default class Water extends Module {
                 `;
             }).join('');
 
-            list.innerHTML = searchHTML + '<div id="water-ui-toggles-list">' + togglesHTML + '</div>';
+            list.innerHTML = searchHTML + '<div id="water-ui-toggles-list">' + modeToggleHTML + togglesHTML + '</div>';
 
             (window as any).waterFilterUIToggles = (query: string) => {
                 const items = document.querySelectorAll('.water-ui-toggle-item');
@@ -2438,6 +2483,33 @@ export default class Water extends Module {
                     const name = item.getAttribute('data-toggle-name') || '';
                     item.style.display = (!q || name.includes(q)) ? '' : 'none';
                 });
+            };
+
+            // Mode toggle handler
+            (window as any).toggleWaterMode = (isRanked: boolean) => {
+                const mode = isRanked ? 'ranked' : 'pugs';
+                localStorage.setItem('water_mode', mode);
+                
+                // Update labels
+                const pugsLabel = document.getElementById('mode-label-pugs');
+                const rankedLabel = document.getElementById('mode-label-ranked');
+                
+                if (pugsLabel) {
+                    pugsLabel.style.color = mode === 'pugs' ? '#ff69b4' : 'rgba(255,255,255,0.5)';
+                    pugsLabel.style.fontWeight = mode === 'pugs' ? 'bold' : 'normal';
+                }
+                
+                if (rankedLabel) {
+                    rankedLabel.style.color = mode === 'ranked' ? '#ff69b4' : 'rgba(255,255,255,0.5)';
+                    rankedLabel.style.fontWeight = mode === 'ranked' ? 'bold' : 'normal';
+                }
+                
+                // Dispatch event for PugsButton module
+                window.dispatchEvent(new CustomEvent('waterModeChanged', {
+                    detail: { mode }
+                }));
+                
+                console.log('[Water] Mode changed to:', mode);
             };
 
             (window as any).toggleWaterUI = (toggleId: string, enabled: boolean) => {
@@ -2457,6 +2529,20 @@ export default class Water extends Module {
                     return;
                 }
 
+                if (toggleId === 'customClanTags') {
+                    localStorage.setItem(`water-ui-${toggleId}`, enabled.toString());
+                    config.set('modules.clancolorizer.enabled', enabled);
+                    console.log(`[Water] Custom Clan Tags: ${enabled ? 'ON' : 'OFF'}`);
+                    return;
+                }
+
+                if (toggleId === 'customBadges') {
+                    localStorage.setItem(`water-ui-${toggleId}`, enabled.toString());
+                    config.set('modules.badges.enabled', enabled);
+                    console.log(`[Water] Custom Badges: ${enabled ? 'ON' : 'OFF'}`);
+                    return;
+                }
+
                 localStorage.setItem(`water-ui-${toggleId}`, enabled.toString());
                 console.log(`[Water] UI Toggle ${toggleId}: ${enabled ? 'ON' : 'OFF'}`);
                 this.applyUIToggles();
@@ -2469,30 +2555,38 @@ export default class Water extends Module {
     getUIToggles(): UIToggle[] {
         return [
             { id: 'hideWaterLoader', name: 'Hide Water Loader', css: '', defaultOn: false, requiresRestart: true },
+            { id: 'customClanTags', name: 'Custom Clan Tags', css: '', defaultOn: true },
+            { id: 'customBadges', name: 'Custom Badges', css: '', defaultOn: true },
             { 
                 id: 'hideKPDPhone', 
                 name: 'Hide KPD Phone', 
                 css: '#policePop, #policePopC {display: none !important;}', 
                 defaultOn: true 
             },
-            { id: 'hideAds', name: 'Hide ADs', css: '#mainLogo, #topRightAdHolder, #aHolder, #endAContainer, #bubbleContainer, #homeStoreAd, #newUserGuide, #doubleRaidDropsAd, #battlepassAd, #updateAd, #mainLogoFace, #seasonLabel, #doubleXPHolder, .webpush-container, #krDiscountAd, #surveyAd {display: none !important;}', defaultOn: false },
-            { id: 'hideTermsInfo', name: 'Hide Terms Info', css: '#termsInfo {display: none;}', defaultOn: false },
-            { id: 'hideSignupAlerts', name: 'Hide Signup Alerts', css: '#signupRewardsButton, .signup-rewards-container, .guest-earned-collect, #notificationCenter {display: none !important;}', defaultOn: true },
+            { id: 'hideAds', name: 'Hide ADs', css: '#mainLogo, #topLeftAdHolder, #aHolder, #endAContainer, #bubbleContainer, #homeStoreAd, #newUserGuide, #doubleRaidDropsAd, #battlepassAd, #updateAd, #mainLogoFace, #seasonLabel, #doubleXPHolder, .webpush-container, #krDiscountAd, #surveyAd {display: none !important;}', defaultOn: true },
+            { id: 'hideTermsInfo', name: 'Hide Terms Info', css: '#termsInfo {display: none !important;}', defaultOn: false },
+            { id: 'hideSignupAlerts', name: 'Hide Signup Alerts', css: '#signupRewardsButton, .signup-rewards-container, .guest-earned-collect, #notificationCenter, .ph-tooltip {display: none !important;}', defaultOn: true },
             { id: 'showModsButton', name: 'Bring Back Mods Button', css: '', defaultOn: true, isModsButton: true },
-            { id: 'hideMoreKrunker', name: 'Hide More Krunker', css: '.menuItem:nth-child(8) {display: none !important;}', defaultOn: true },
-            { id: 'hideChallenges', name: 'Hide Challenges', css: '.menuItem:nth-child(3) {display: none;}', defaultOn: false },
-            { id: 'hideSocial', name: 'Hide Social & Trading Button', css: '.menuItem:nth-child(5) {display: none;}', defaultOn: false },
-            { id: 'hideCommunity', name: 'Hide Community Button', css: '.menuItem:nth-child(6) {display: none;}', defaultOn: true },
+            { id: 'hideMoreKrunker', name: 'Hide More Krunker', css: '.nav-item:nth-child(8) {display: none !important;}.nav-item:nth-child(9) {display: none !important;}', defaultOn: true },
+            { id: 'hideBattlepass', name: 'Hide Battlepass', css: '.menuItem:nth-child(2) {display: none !important;}', defaultOn: true },
+            { id: 'hideChallenges', name: 'Hide Challenges', css: '.menuItem:nth-child(10) {display: none !important;}', defaultOn: false },
+            { id: 'hideSocial', name: 'Hide Social & Trading Button', css: '.menuItem:nth-child(15) {display: none !important;}', defaultOn: false },
+            { id: 'hideCommunity', name: 'Hide Community Button', css: '.menuItem:nth-child(16) {display: none !important;}', defaultOn: true },
             { id: 'hideGames', name: 'Hide Games Button', css: '.menuItem:nth-child(7) {display: none;}', defaultOn: false },
-            { id: 'hideStream', name: 'Hide Old & New Stream Container', css: '#streamContainer, #streamContainerNew {display: none !important;}', defaultOn: false },
+            { id: 'hideStream', name: 'Hide Old & New Stream Container', css: '.right-panel {display: none !important;}', defaultOn: false },
             { id: 'hideQuickMatch', name: 'Hide Quick Match Button', css: '#menuBtnQuickMatch {display: none !important;}', defaultOn: true },
-            { id: 'hideLeaderboardButton', name: 'Hide Leaderboard Button', css: '.icon-button.svelte-wmukcv {display: none !important;}', defaultOn: true },
-            { id: 'hideTurfWars', name: 'Hide Turf Wars', css: '.main-menu-button-container.svelte-f3amho[style="top: 92px; left: 520px; --border-color:#00B1FF;"] {display: none !important;}', defaultOn: true },
-            { id: 'hideNewMarket', name: 'Hide New Market', css: '.main-menu-button-container.svelte-f3amho[style="top: 282px; left: 520px; --border-color:#e39e1d;"] {display: none !important;}', defaultOn: true },
-            { id: 'hideRaffles', name: 'Hide Raffles', css: '.main-menu-button-container.svelte-f3amho[style="top: 472px; left: 520px; --border-color:#DC2626;"] {display: none !important;}', defaultOn: true },
+            { id: 'hideLeaderboardButton', name: 'Hide Leaderboard Button', css: '.menuItem:nth-child(12) {display: none !important;}', defaultOn: true },
+            { id: 'hideTurfWars', name: 'Hide Turf Wars', css: '.menuItem:nth-child(7) {display: none !important;}', defaultOn: true },
+            { id: 'hideNewMarket', name: 'Hide New Market', css: '.menuItem:nth-child(8) {display: none !important;}', defaultOn: true },
+            { id: 'hideRaffles', name: 'Hide Raffles', css: '.menuItem:nth-child(13) {display: none !important;}', defaultOn: true },
             { id: 'hideDoubleXP', name: 'Hide Double XP', css: '#doubleXPButton {display: none !important;}', defaultOn: true },
             { id: 'hideStore', name: 'Hide Store', css: '#menuBtnWaterStore {display: none !important;}', defaultOn: false },
+            { id: 'hideGuide', name: 'Hide Guide', css: '.guideItem {display: none !important;}', defaultOn: true },
+            { id: 'removeCustomGames', name: 'Remove Custom Games', css: '#menuBtnCustomGames {display: none;}', defaultOn: true },
             { id: 'hideExit', name: 'Hide Client Exit', css: '#clientExit {display: none !important;}', defaultOn: true },
+            { id: 'hideSidebarDivider', name: 'Hide Sidebar Divider', css: '.sidebarDivider {display: none;}', defaultOn: true, hidden: true },
+            { id: 'oldStyleInviteJoin', name: 'Old Style Invite/Join Button', css: '.match-action-btn {height: 30px !important;padding-top: 11px !important;padding-bottom: 11px !important;padding-left: 22px !important;padding-right: 22px !important;font-size: 20.5px !important;opacity: 1 !important;margin-left: -2px !important;border-radius: 4px;text-transform: none !important;background-color: rgba(0, 0, 0, 0.3);}.match-action-sep {display: none;}#inviteButton {border: 4px solid #fffa00 !important;margin-right: 8px;}#menuBtnJoin {border: 4px solid #00ceff !important;}#matchInfoHolder {border: none;margin-bottom: 0 !important;}', defaultOn: true, hidden: true },
+            { id: 'hideVerticalSeparator', name: 'Hide Vertical Separator', css: '.verticalSeparator[style="height:35px;"] {display: none !important;}', defaultOn: true, hidden: true },
         ];
     }
 

@@ -15,5 +15,26 @@
     },
     "misc": {
         "watermark": true
+    },
+    "waterBotAPI": "https://outhouse-clobber-imprecise.ngrok-free.dev",
+    "modules": {
+        "clancolorizer": {
+            "enabled": true
+        },
+        "badges": {
+            "enabled": true
+        },
+        "performance": {
+            "enablePerformanceOptimizations": true,
+            "angleBackend": "d3d11",
+            "acceleratedCanvas": true,
+            "removeAnimations": false,
+            "uncap": false,
+            "enablePlaceboFPS": false,
+            "placeboFPSMultiplier": 1,
+            "inProcessGPU": false,
+            "enableSplash": true,
+            "debugLogging": false
+        }
     }
 }

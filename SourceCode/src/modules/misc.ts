@@ -15,7 +15,6 @@ export default class Misc extends Module {
     options = [
         new Checkbox(this, {
             name: 'Show client watermark',
-            description: '',
             id: 'watermark',
             onChange(value) {
                 document.body.style.setProperty(
@@ -27,21 +26,18 @@ export default class Misc extends Module {
         }),
         new TextInput(this, {
             name: 'Custom Loading Screen',
-            description: 'Accepts Direct Image/GIF URLs',
             label: 'https://example.com/image.gif',
             id: 'customLoadingScreen',
             needsRestart: true,
         }),
         new Checkbox(this, {
             name: 'Placebo FPS',
-            description: 'Multiply the FPS counter to show a bigger number',
             id: 'placeboFps.enabled',
             onChange: () => this.placeboFps(),
             defaultValue: false,
         }),
         new Slider(this, {
             name: 'Placebo FPS multiplier',
-            description: 'How much to multiply the FPS counter',
             id: 'placeboFps.multiplier',
             onChange: () => this.placeboFps(),
             defaultValue: 1,
@@ -51,7 +47,6 @@ export default class Misc extends Module {
         }),
         new Checkbox(this, {
             name: 'Lock window size',
-            description: '',
             id: 'lockWindowSize',
             onChange() {
                 ipcRenderer.send('updateWindowSizeLock');
@@ -59,7 +54,6 @@ export default class Misc extends Module {
         }),
         new TextInput(this, {
             name: 'Window size',
-            description: '',
             label: '1920x1080',
             id: 'windowSize',
             onChange() {

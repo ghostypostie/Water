@@ -26,7 +26,6 @@ export default class Discord extends Module {
         new Dropdown(this, {
             name: 'Rich Presence Mode',
             id: 'mode',
-            description: 'What to display on Discord',
             options: [
                 {
                     name: 'Join Game Button',
@@ -45,27 +44,22 @@ export default class Discord extends Module {
         new Checkbox(this, {
             name: 'Show match info',
             id: 'matchInfo',
-            description: 'Show match info on Discord',
         }),
         new Checkbox(this, {
             name: 'Show time left',
             id: 'showTime',
-            description: 'Show time left on Discord',
         }),
         new Checkbox(this, {
             name: 'Show lobby size',
             id: 'showLobbySize',
-            description: 'Show lobby size on Discord',
         }),
         new Checkbox(this, {
             name: 'Show user info',
             id: 'showUser',
-            description: 'Show username & class on Discord',
         }),
         new Button(this, {
             name: 'Buttons',
             id: 'buttons',
-            description: 'Configure buttons',
             label: 'Edit',
 
             onChange: this.buttonUI.open.bind(this.buttonUI),
@@ -117,7 +111,7 @@ export default class Discord extends Module {
 
         let now = Date.now();
         const baseActivity = {
-            largeImageKey: 'logo',
+            largeImageKey: 'pink',
             largeImageText: app.getName() + ' v' + app.getVersion(),
         };
 

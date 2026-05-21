@@ -8,13 +8,13 @@ export default class Checkbox extends ClientOption {
     constructor(module: Module, opts: {
         name: string,
         id: string,
-        description: string,
         color?: 'purple' | 'pink' | 'cyan' | 'red',
         needsRefresh?: boolean,
         needsRestart?: boolean,
         onChange?(event: any): void,
 
-        label: string
+        label: string,
+        description?: string
     }) {
         super(module, opts);
         this.label = opts.label;

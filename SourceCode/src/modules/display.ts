@@ -15,7 +15,6 @@ export default class Display extends Module {
     options = [
         new Dropdown(this, {
             name: 'Display Mode',
-            description: 'Window display mode. Use borderless for best FPS if fullscreen causes issues.',
             id: 'mode',
             needsRestart: false,
             options: [

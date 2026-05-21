@@ -9,13 +9,13 @@ export default class TextInput extends ClientOption {
     constructor(module: Module, opts: {
         name: string,
         id: string,
-        description: string,
         needsRefresh?: boolean,
         needsRestart?: boolean,
         onChange?(value: any): void,
 
-        label: string
-        type?: string
+        label: string,
+        type?: string,
+        description?: string
     }) {
         super(module, opts);
         this.label = opts.label;

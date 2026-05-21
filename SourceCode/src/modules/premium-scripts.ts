@@ -68,7 +68,6 @@ export default class PremiumScripts extends Module {
                     new Checkbox(this, {
                         name: script.name,
                         id: script.id,
-                        description: `Toggle ${script.name}`,
                         onChange: (enabled: boolean) => {
                             if (enabled) {
                                 this.enableScript(script);

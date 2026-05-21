@@ -27,6 +27,23 @@ ipcMain.on('get-user-data-path', (event) => {
     event.returnValue = app.getPath('userData');
 });
 
+// Clan Tags & Badges - These now run in renderer process
+// Main process just acknowledges the request
+ipcMain.on('getClans', (event) => {
+    // Renderer will fetch directly from Supabase
+    event.sender.send('getClans', []);
+});
+
+ipcMain.on('getBadges', (event) => {
+    // Renderer will fetch directly from Supabase
+    event.sender.send('getBadges', []);
+});
+
+ipcMain.on('getDeathCards', (event) => {
+    // Renderer will fetch directly from Supabase
+    event.sender.send('getDeathCards', []);
+});
+
 // Quick Play region ping system (Tidal scanner)
 const QP_SERVER_MAP: Record<string, string> = {
     'us-ca-sv': 'SV',
@@ -98,6 +115,22 @@ ipcMain.handle('quickplay-ping-regions', async () => {
         console.warn('[Water] quickplay-ping-regions failed:', e);
         return qpPingCache || {};
     }
+});
+
+// IPC handler for focusing window (for game ready overlay)
+ipcMain.handle('focus-window', () => {
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+        const mainWindow = windows[0];
+        if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+        }
+        mainWindow.focus();
+        mainWindow.show();
+        mainWindow.moveTop();
+        return true;
+    }
+    return false;
 });
 
 // Keybind cache for instant updates
@@ -312,6 +345,7 @@ export default async function createMainWindow(): Promise<BrowserWindow> {
             preload: join(__dirname, 'preload/index.js'),
             sandbox: false,
             contextIsolation: false,
+            nativeWindowOpen: true,
         },
     });
 
@@ -352,7 +386,7 @@ export default async function createMainWindow(): Promise<BrowserWindow> {
     let moduleManager = new ModuleManger(Context.Common);
     await moduleManager.load(RunAt.LoadStart);
 
-    // IPC handler for focusing window (robust implementation like ranked match)
+    // IPC handler for focusing window (robust implementation for external windows)
     ipcMain.on('focus-window', () => {
         if (window && !window.isDestroyed()) {
             if (window.isMinimized()) window.restore();
@@ -397,9 +431,10 @@ export default async function createMainWindow(): Promise<BrowserWindow> {
         event.preventDefault();
         handleNavigation(new URL(url));
     });
-    window.webContents.on('new-window', (event, url) => {
-        event.preventDefault();
-        handleNavigation(new URL(url));
+    // Allow popups / window.open() instead of blocking them.
+    // This is needed for Krunker pages that open auth, marketplace, or external windows.
+    window.webContents.on('new-window', () => {
+        // Intentionally do not call event.preventDefault(); Electron will create the popup.
     });
     window.webContents.on(
         'before-input-event',
@@ -433,6 +468,7 @@ export function handleNavigation(url: URL) {
                     preload: join(__dirname, 'preload/index.js'),
                     sandbox: false,
                     contextIsolation: false,
+                    nativeWindowOpen: true,
                 },
             });
 
@@ -441,9 +477,9 @@ export function handleNavigation(url: URL) {
                 event.preventDefault();
                 handleNavigation(new URL(url));
             });
-            win.webContents.on('new-window', (event, url) => {
-                event.preventDefault();
-                handleNavigation(new URL(url));
+            // Allow popups from child windows too.
+            win.webContents.on('new-window', () => {
+                // Intentionally do not call event.preventDefault(); Electron will create the popup.
             });
             win.webContents.on(
                 'before-input-event',

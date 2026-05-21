@@ -1,9 +1,22 @@
 {
   "name": "Water",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "description": "Fresh Water",
   "author": "Ghosty",
   "main": "js/launch.js",
+  "scripts": {
+    "clean:win": "rmdir /s /q js",
+    "clean:linux": "rm -rf js",
+    "transpile": "npx tsc",
+    "start": "npm run transpile && node dev-logger.js",
+    "start:nolog": "npm run transpile && npx electron .",
+    "build": "npm run transpile && npx electron-builder",
+    "build:win": "npm run transpile && npx electron-builder --win",
+    "build:mac": "npm run transpile && npx electron-builder --mac",
+    "build:linux": "npm run transpile && npx electron-builder --linux",
+    "build:all": "npm run transpile && npx electron-builder -wml",
+    "release": "npm run transpile && npx electron-builder --publish always"
+  },
   "devDependencies": {
     "@types/node": "^16.18.126",
     "@types/ws": "^8.5.10",
@@ -20,18 +33,5 @@
     "electron-updater": "^6.8.3",
     "typescript": "^5.9.3",
     "ws": "^8.16.0"
-  },
-  "scripts": {
-    "clean:win": "rmdir /s /q js",
-    "clean:linux": "rm -rf js",
-    "transpile": "npx tsc",
-    "start": "npm run transpile && node dev-logger.js",
-    "start:nolog": "npm run transpile && npx electron .",
-    "build": "npm run transpile && npx electron-builder",
-    "build:win": "npm run transpile && npx electron-builder --win",
-    "build:mac": "npm run transpile && npx electron-builder --mac",
-    "build:linux": "npm run transpile && npx electron-builder --linux",
-    "build:all": "npm run transpile && npx electron-builder -wml",
-    "release": "npm run transpile && npx electron-builder --publish always"
   }
 }

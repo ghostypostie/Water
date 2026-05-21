@@ -11,7 +11,6 @@ export default class Dropdown extends ClientOption {
     constructor(module: Module, opts: {
         name: string,
         id: string,
-        description: string,
         needsRefresh?: boolean,
         needsRestart?: boolean,
         defaultValue?: any,

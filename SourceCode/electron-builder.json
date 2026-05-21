@@ -16,7 +16,8 @@
         "provider": "github",
         "owner": "ghostypostie",
         "repo": "Water",
-        "releaseType": "release"
+        "releaseType": "release",
+        "publishAutoUpdate": true
     },
     "win": {
         "artifactName": "Water.exe",
@@ -26,7 +27,8 @@
                 "arch": ["x64"]
             }
         ],
-        "icon": "assets/img/logo.ico"
+        "icon": "assets/img/logo.ico",
+        "verifyUpdateCodeSignature": false
     },
     "nsis": {
         "artifactName": "Water.exe",
@@ -52,7 +54,22 @@
         "hardenedRuntime": true,
         "gatekeeperAssess": false,
         "entitlements": "build/entitlements.mac.plist",
-        "entitlementsInherit": "build/entitlements.mac.plist"
+        "entitlementsInherit": "build/entitlements.mac.plist",
+        "type": "distribution",
+        "minimumSystemVersion": "10.13.0",
+        "darkModeSupport": true,
+        "extendInfo": {
+            "NSAppSleepDisabled": true,
+            "NSSupportsAutomaticGraphicsSwitching": true,
+            "NSHighResolutionCapable": true,
+            "LSMinimumSystemVersion": "10.13.0",
+            "CFBundleURLTypes": [
+                {
+                    "CFBundleURLSchemes": ["water"],
+                    "CFBundleURLName": "Water Protocol"
+                }
+            ]
+        }
     },
     "dmg": {
         "artifactName": "Water.dmg",

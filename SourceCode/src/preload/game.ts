@@ -177,21 +177,217 @@ export default class GamePreload extends Preload {
     onLoadStart() {
         window.OffCliV = true;
         localStorage.removeItem('conUID_');
+        
+        // Apply remove animations if enabled
+        this.applyRemoveAnimations();
     }
 
     onLoadEnd() {
         window.clientExit.style.display = 'flex';
         window.closeClient = () => window.close();
 
-        let style = document.createElement('style');
+        // Inject game.css with mutation observer to ensure it always overrides
+        const style = document.createElement('style');
+        style.id = 'water-game-css';
         style.textContent = readFileSync(
             join(__dirname, '../../assets/style/game.css'),
             'utf8'
         );
         document.head.append(style);
 
+        // Observe new style/link elements and keep our CSS last
+        const observer = new MutationObserver(() => {
+            if (document.head.lastChild !== style) {
+                document.head.appendChild(style);
+            }
+        });
+        observer.observe(document.head, { childList: true, subtree: true });
+
         injectWatermark();
         injectHSP();
+        
+        // Apply runtime performance optimizations
+        this.applyRuntimeOptimizations();
+    }
+    
+    applyRemoveAnimations() {
+        try {
+            const Store = require('electron-store');
+            const config = new Store();
+            const removeAnimations = config.get('modules.performance.removeAnimations', false);
+            
+            if (removeAnimations) {
+                console.log('[Water] Removing animations...');
+                const style = document.createElement('style');
+                style.id = 'water-no-animations';
+                style.textContent = `
+                    * :not(#waterLoadingOverlay):not(#waterLoadingOverlay *) {
+                        animation: none !important;
+                        transition: none !important;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+                console.log('[Water] Animations removed');
+            }
+        } catch (e) {
+            console.error('[Water] Failed to apply remove animations:', e);
+        }
+    }
+    
+    applyRuntimeOptimizations() {
+        try {
+            const Store = require('electron-store');
+            const config = new Store();
+            const enablePerformanceOptimizations = config.get('modules.performance.enablePerformanceOptimizations', true);
+            
+            if (!enablePerformanceOptimizations) {
+                console.log('[Water] Performance optimizations disabled');
+                return;
+            }
+            
+            console.log('[Water] Applying runtime performance optimizations...');
+            
+            // Keep-Alive / Anti-Throttling
+            this.setupKeepAlive();
+            
+            // Post-Match Garbage Collection
+            this.setupPostMatchGC();
+            
+            // Raw Mouse Input
+            this.setupRawMouseInput();
+            
+            console.log('[Water] Runtime optimizations applied');
+        } catch (e) {
+            console.error('[Water] Failed to apply runtime optimizations:', e);
+        }
+    }
+    
+    setupKeepAlive() {
+        // Override document.hidden and visibilityState (zero overhead)
+        Object.defineProperty(document, 'hidden', {
+            get: () => false,
+            configurable: true
+        });
+        
+        Object.defineProperty(document, 'visibilityState', {
+            get: () => 'visible',
+            configurable: true
+        });
+        
+        // Create hidden 1x1 canvas (minimal memory footprint)
+        const keepAliveCanvas = document.createElement('canvas');
+        keepAliveCanvas.width = 1;
+        keepAliveCanvas.height = 1;
+        keepAliveCanvas.style.cssText = 'position:fixed;top:-10px;left:-10px;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-9999';
+        document.body.appendChild(keepAliveCanvas);
+        
+        const ctx = keepAliveCanvas.getContext('2d', { 
+            alpha: false,  // Disable alpha channel for better performance
+            desynchronized: true  // Allow desynchronized rendering
+        });
+        
+        // Optimized keep-alive loop - only renders when needed
+        let lastRender = 0;
+        const keepAlive = (timestamp: number) => {
+            // Throttle to max 30 FPS (sufficient to prevent throttling)
+            if (timestamp - lastRender >= 33) {
+                if (ctx) {
+                    ctx.fillRect(0, 0, 1, 1);  // Single operation, no clear needed
+                }
+                lastRender = timestamp;
+            }
+            requestAnimationFrame(keepAlive);
+        };
+        requestAnimationFrame(keepAlive);
+        
+        // Low-frequency empty interval (sufficient to prevent timer suspension)
+        setInterval(() => {}, 100);  // Reduced from 16ms to 100ms
+        
+        console.log('[Water] Keep-alive system enabled (optimized)');
+    }
+    
+    setupPostMatchGC() {
+        // Lightweight state tracking without continuous observation
+        let lastGameState = 'unknown';
+        
+        const checkGameState = () => {
+            const uiBase = document.getElementById('uiBase');
+            if (!uiBase) return;
+            
+            const onMenu = uiBase.classList.contains('onMenu');
+            const onCompMenu = uiBase.classList.contains('onCompMenu');
+            
+            const currentState = (!onMenu && !onCompMenu) ? 'ingame' : 'menu';
+            
+            // Only trigger GC on state transition from ingame to menu
+            if (lastGameState === 'ingame' && currentState === 'menu') {
+                console.log('[Water] Match ended, scheduling GC...');
+                setTimeout(() => {
+                    if (typeof (global as any) !== 'undefined' && typeof (global as any).gc === 'function') {
+                        (global as any).gc();
+                        console.log('[Water] Post-match GC executed');
+                    }
+                }, 2000);
+            }
+            
+            lastGameState = currentState;
+        };
+        
+        // Use efficient MutationObserver with throttling
+        const waitForUIBase = () => {
+            const uiBase = document.getElementById('uiBase');
+            if (uiBase) {
+                let throttleTimeout: NodeJS.Timeout | null = null;
+                
+                const observer = new MutationObserver(() => {
+                    // Throttle checks to max once per 500ms to reduce overhead
+                    if (!throttleTimeout) {
+                        throttleTimeout = setTimeout(() => {
+                            checkGameState();
+                            throttleTimeout = null;
+                        }, 500);
+                    }
+                });
+                
+                observer.observe(uiBase, { 
+                    attributes: true, 
+                    attributeFilter: ['class']  // Only watch class changes
+                });
+                
+                console.log('[Water] Post-match GC monitoring enabled (optimized)');
+            } else {
+                // Exponential backoff for polling
+                setTimeout(waitForUIBase, 200);
+            }
+        };
+        
+        waitForUIBase();
+    }
+    
+    setupRawMouseInput() {
+        // Use passive event listener for better performance
+        const applyRawMouse = () => {
+            const gameCanvas = document.getElementById('gameCanvas');
+            if (!gameCanvas) {
+                console.warn('[Water] gameCanvas not found, raw mouse input not applied');
+                return;
+            }
+            
+            const originalRequestPointerLock = (gameCanvas as any).requestPointerLock;
+            if (originalRequestPointerLock) {
+                (gameCanvas as any).requestPointerLock = function() {
+                    return originalRequestPointerLock.call(this, { unadjustedMovement: true });
+                };
+                console.log('[Water] Raw mouse input enabled');
+            }
+        };
+        
+        // Apply immediately if DOM is ready, otherwise wait efficiently
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', applyRawMouse, { once: true, passive: true });
+        } else {
+            applyRawMouse();
+        }
     }
 }
 

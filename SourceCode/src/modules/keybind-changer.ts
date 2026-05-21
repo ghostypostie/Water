@@ -17,6 +17,7 @@ interface WaterKeybind {
     name: string;
     default?: string;
     section: string;
+    locked?: boolean;
 }
 
 interface KeyObj {
@@ -36,7 +37,9 @@ const CLIENT_KEYBINDS: WaterKeybind[] = [
 ];
 
 const WATER_KEYBINDS: WaterKeybind[] = [
-    { id: 'keybinds.quickplay',  name: 'Quick Play',       default: 'F4',  section: 'Water Features' },
+    { id: 'keybinds.quickplay',    name: 'Quick Play',                   default: 'F4',            section: 'Water Features' },
+    { id: 'keybinds.waterPanel',   name: 'Water Theme & Userscript Panel', default: 'F7',         section: 'Water Features' },
+    { id: 'keybinds.resetCSS',     name: 'Reset CSS',                    default: 'CTRL + /',      section: 'Water Features', locked: true },
 ];
 
 export default class KeybindChanger extends Module {
@@ -417,18 +420,23 @@ export default class KeybindChanger extends Module {
 
         html += `<div style="float:right">`;
 
-        // Reset button (native Krunker style)
-        html += `<span class="reset" title="Reset Bind" data-action="reset" data-kbid="${kb.id}">`;
-        html += `<i class="material-icons" style="font-size:40px;color:var(--yellow);">refresh</i>`;
-        html += `</span>`;
+        if (kb.locked) {
+            // Locked keybind: display only, no interaction
+            html += `<span class="settText floatRNoC keyIcon" data-kbid="${kb.id}" style="opacity:0.6;cursor:default;pointer-events:none;">${keyDisplay}</span>`;
+        } else {
+            // Reset button (native Krunker style)
+            html += `<span class="reset" title="Reset Bind" data-action="reset" data-kbid="${kb.id}">`;
+            html += `<i class="material-icons" style="font-size:40px;color:var(--yellow);">refresh</i>`;
+            html += `</span>`;
 
-        // Unbind button (native Krunker style)
-        html += `<span class="unbind" title="Unbind" data-action="unbind" data-kbid="${kb.id}">`;
-        html += `<i class="material-icons" style="font-size:40px;color:var(--red);">delete_forever</i>`;
-        html += `</span>`;
+            // Unbind button (native Krunker style)
+            html += `<span class="unbind" title="Unbind" data-action="unbind" data-kbid="${kb.id}">`;
+            html += `<i class="material-icons" style="font-size:40px;color:var(--red);">delete_forever</i>`;
+            html += `</span>`;
 
-        // Key display button (native Krunker style)
-        html += `<span class="settText floatRNoC keyIcon" data-kbid="${kb.id}" onmouseover="playTick()" data-action="change">${keyDisplay}</span>`;
+            // Key display button (native Krunker style)
+            html += `<span class="settText floatRNoC keyIcon" data-kbid="${kb.id}" onmouseover="playTick()" data-action="change">${keyDisplay}</span>`;
+        }
 
         html += `</div>`;
         html += `</div>`;
@@ -876,23 +884,11 @@ export default class KeybindChanger extends Module {
             const target = e.target as HTMLElement;
             if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
 
-            console.log('[KeybindChanger] Key pressed:', e.key, 'Code:', e.code, 'Shift:', e.shiftKey, 'Alt:', e.altKey, 'Ctrl:', e.ctrlKey);
-            
-            // Special debug for F4
-            if (e.key === 'F4' || e.code === 'F4') {
-                console.log('[KeybindChanger] ⚠️ F4 DETECTED! Starting keybind check...');
-            }
-
             const all = [...CLIENT_KEYBINDS, ...WATER_KEYBINDS];
 
             for (const kb of all) {
                 const bound = this.getKeybind(kb.id, kb.default);
-                if (!bound) {
-                    console.log('[KeybindChanger] No keybind found for:', kb.id);
-                    continue;
-                }
-
-                console.log('[KeybindChanger] Checking keybind:', kb.id, 'bound.key:', bound.key, 'bound.type:', bound.type);
+                if (!bound) continue;
 
                 let matched = false;
 
@@ -902,24 +898,13 @@ export default class KeybindChanger extends Module {
                     const altMatch = bound.alt === e.altKey;
                     const ctrlMatch = bound.ctrl === e.ctrlKey;
                     
-                    console.log('[KeybindChanger] Comparison for', kb.id, ':', {
-                        keyMatch,
-                        shiftMatch,
-                        altMatch,
-                        ctrlMatch,
-                        boundKey: bound.key,
-                        eventKey: e.key
-                    });
-                    
                     if (keyMatch && shiftMatch && altMatch && ctrlMatch) {
                         matched = true;
-                        console.log('[KeybindChanger] ✓ MATCHED keybind:', kb.id, kb.name);
                     }
                 }
 
                 if (matched) {
                     // Execute the keybind action
-                    console.log('[KeybindChanger] Executing keybind:', kb.id);
                     this.executeKeybind(kb.id, e);
                     break;
                 }
@@ -948,7 +933,8 @@ export default class KeybindChanger extends Module {
         // CLIENT_KEYBINDS (Client Controls) are handled by the main process via IPC
         // We need to prevent browser default behavior (like F11 fullscreen)
         // but let the event reach the main process
-        if (kbId.startsWith('keybinds.') && kbId !== 'keybinds.quickplay') {
+        const waterKeybindIds = WATER_KEYBINDS.map(k => k.id);
+        if (kbId.startsWith('keybinds.') && !waterKeybindIds.includes(kbId)) {
             console.log('[KeybindChanger] CLIENT_KEYBIND triggered:', kbId);
             e.preventDefault(); // Prevent browser default (F11 fullscreen, F5 refresh, etc.)
             // Don't call stopPropagation() - let it reach main process
@@ -963,41 +949,41 @@ export default class KeybindChanger extends Module {
         switch (kbId) {
             case 'keybinds.quickplay':
                 console.log('[KeybindChanger] Checking Quick Play enabled status...');
-                
+
                 // Debug: Check all possible config paths
                 console.log('[KeybindChanger] Config debug:');
                 console.log('  - modules.quickplay.quickplay.enabled:', config.get('modules.quickplay.quickplay.enabled', 'NOT_FOUND'));
                 console.log('  - modules.quickplay.enabled:', config.get('modules.quickplay.enabled', 'NOT_FOUND'));
                 console.log('  - quickplay.enabled:', config.get('quickplay.enabled', 'NOT_FOUND'));
                 console.log('  - All config keys:', Object.keys(config.store).filter(k => k.includes('quickplay')));
-                
+
                 // Use global config, not this.config, because Quick Play module saves to modules.quickplay.quickplay.enabled
                 const quickPlayEnabled = config.get('modules.quickplay.quickplay.enabled', false);
                 console.log('[KeybindChanger] Quick Play keybind pressed, enabled:', quickPlayEnabled);
                 console.log('[KeybindChanger] Type of enabled:', typeof quickPlayEnabled);
-                
+
                 if (!quickPlayEnabled) {
                     console.log('[KeybindChanger] Quick Play is DISABLED - showing notification');
                     this.showQuickPlayDisabledNotification();
                     return;
                 }
-                
+
                 console.log('[KeybindChanger] Executing Quick Play');
                 console.log('[KeybindChanger] window.manager:', (window as any).manager);
                 console.log('[KeybindChanger] window.water:', (window as any).water);
-                
+
                 const mgr = (window as any).manager;
                 const waterMods = (window as any).water?.modules;
                 const pool = (mgr?.loaded || mgr?.modules || waterMods || []) as any[];
-                
+
                 console.log('[KeybindChanger] Pool length:', pool.length);
                 console.log('[KeybindChanger] Pool modules:', pool.map((m: any) => m?.id || m?.name || 'unknown'));
-                
+
                 const quickPlayModule = pool.find((m: any) => m && m.id === 'quickplay');
                 console.log('[KeybindChanger] QuickPlay module found:', !!quickPlayModule);
                 console.log('[KeybindChanger] QuickPlay module:', quickPlayModule);
                 console.log('[KeybindChanger] Has findAndJoinGame:', !!quickPlayModule?.findAndJoinGame);
-                
+
                 if (quickPlayModule?.findAndJoinGame) {
                     console.log('[KeybindChanger] Calling findAndJoinGame()...');
                     quickPlayModule.findAndJoinGame();
@@ -1007,6 +993,46 @@ export default class KeybindChanger extends Module {
                     console.error('[KeybindChanger] Available modules:', pool.map((m: any) => ({ id: m?.id, name: m?.name, methods: Object.keys(m || {}) })));
                 }
                 break;
+
+            case 'keybinds.waterPanel':
+                console.log('[KeybindChanger] Opening Water Theme & Userscript Panel');
+                const waterModule = (window as any).water?.modules?.find((m: any) => m && m.id === 'water');
+                if (waterModule?.openWaterWindow) {
+                    waterModule.openWaterWindow();
+                    console.log('[KeybindChanger] Water panel opened');
+                } else {
+                    console.error('[KeybindChanger] Water module not found or missing openWaterWindow');
+                }
+                break;
+
+            case 'keybinds.resetCSS':
+                console.log('[KeybindChanger] Resetting CSS');
+                // Remove the community CSS style element
+                const styleEl = document.getElementById('water-community-css');
+                if (styleEl) {
+                    styleEl.remove();
+                    console.log('[KeybindChanger] Removed water-community-css style element');
+                }
+                // Remove theme variable overrides
+                const varStyleEl = document.getElementById('water-theme-vars');
+                if (varStyleEl) {
+                    varStyleEl.remove();
+                    console.log('[KeybindChanger] Removed water-theme-vars style element');
+                }
+                // Reset active theme in Water module
+                const waterMod = (window as any).water?.modules?.find((m: any) => m && m.id === 'water');
+                if (waterMod) {
+                    waterMod.activeThemeId = 'default';
+                    localStorage.setItem('water-active-theme', 'default');
+                }
+                showToast({
+                    title: 'CSS Reset',
+                    message: 'All custom CSS has been cleared',
+                    type: 'success',
+                    duration: 3000
+                });
+                break;
+
             default:
                 console.log('[KeybindChanger] Unknown keybind:', kbId);
         }

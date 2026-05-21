@@ -25,13 +25,11 @@ export default class SettingsSwapper extends Module {
         new Checkbox(this, {
             name: 'Reset Settings Before Load',
             id: 'resetBeforeLoad',
-            description: 'Automatically reset Krunker settings before loading a profile (recommended)',
             defaultValue: true,
         }),
         new Button(this, {
             name: 'Manage Profiles',
             id: 'manageProfiles',
-            description: 'Open the settings swapper interface to manage your profiles',
             label: 'Open Settings Swapper',
             onChange: () => {
                 this.openUI();

@@ -3,6 +3,19 @@ import Preload from './preload';
 import GamePreload from './game';
 import CommonPreload from './common';
 import EditorPreload from './editor';
+import { ipcRenderer } from 'electron';
+
+// Expose electron APIs to window
+(window as any).electron = {
+    focusWindow: async () => {
+        try {
+            return await ipcRenderer.invoke('focus-window');
+        } catch (e) {
+            console.error('[Electron] Failed to focus window:', e);
+            return false;
+        }
+    }
+};
 
 let url = new URL(window.location.href);
 let context = fromURL(url);

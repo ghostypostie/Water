@@ -26,20 +26,17 @@ class AddAltUI extends UI {
             options: [
                 new TextInput(this.module, {
                     id: 'editui.username',
-                    description: '',
                     label: 'Username',
                     name: 'Username',
                 }),
                 new TextInput(this.module, {
                     id: 'editui.password',
-                    description: '',
                     label: 'Password',
                     name: 'Password',
                     type: 'password',
                 }),
                 new Keybind(this.module, {
                     id: 'editui.keybind',
-                    description: '',
                     name: 'Keybind',
                 }),
             ],
@@ -53,7 +50,6 @@ class AddAltUI extends UI {
 
             name: '',
             id: '',
-            description: '',
             onChange: () => {
                 let username = this.module.config.get('editui.username', '').toLowerCase();
                 let password = this.module.config.get('editui.password', '');
@@ -99,7 +95,6 @@ class AddAltUI extends UI {
 
             name: '',
             id: '',
-            description: '',
             onChange: () => {
                 this.module.config.delete('editui.username');
                 this.module.config.delete('editui.password');

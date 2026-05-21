@@ -75,6 +75,10 @@ export default class SettingsSwapperUI extends UI {
             emptyMsg.style.cssText = 'color: rgba(255,255,255,0.5); font-size: 14px; margin-bottom: 20px;';
             emptyMsg.textContent = 'No settings profiles yet.';
             
+            // Button container
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'display: flex; gap: 10px; justify-content: center;';
+            
             // Add Profile Button (centered, same alignment as text)
             const addButton = document.createElement('button');
             addButton.className = 'settingsBtn';
@@ -100,10 +104,42 @@ export default class SettingsSwapperUI extends UI {
                 this.showAddProfileDialog();
             };
             
+            // Save Current Settings Button
+            const saveCurrentButton = document.createElement('button');
+            saveCurrentButton.className = 'settingsBtn';
+            saveCurrentButton.textContent = 'Save Current Settings';
+            saveCurrentButton.style.cssText = `
+                background: rgba(100, 200, 100, 0.15);
+                border: 1px solid rgba(100, 200, 100, 0.6);
+                color: #E5FFE5;
+                padding: 12px 24px;
+                cursor: pointer;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 14px;
+                transition: none;
+            `;
+            saveCurrentButton.onmouseenter = () => {
+                saveCurrentButton.style.background = 'rgba(100, 200, 100, 0.25)';
+            };
+            saveCurrentButton.onmouseleave = () => {
+                saveCurrentButton.style.background = 'rgba(100, 200, 100, 0.15)';
+            };
+            saveCurrentButton.onclick = () => {
+                this.showSaveCurrentSettingsDialog();
+            };
+            
+            buttonContainer.appendChild(addButton);
+            buttonContainer.appendChild(saveCurrentButton);
+            
             emptyContainer.appendChild(emptyMsg);
-            emptyContainer.appendChild(addButton);
+            emptyContainer.appendChild(buttonContainer);
             profilesList.appendChild(emptyContainer);
         } else {
+            // Button container for top buttons
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px;';
+            
             // Add Profile Button (top when profiles exist)
             const addButton = document.createElement('button');
             addButton.className = 'settingsBtn';
@@ -116,10 +152,10 @@ export default class SettingsSwapperUI extends UI {
                 text-align: center;
                 cursor: pointer;
                 border-radius: 4px;
-                margin-bottom: 10px;
                 font-weight: bold;
                 font-size: 20px;
                 transition: none;
+                flex: 0 0 auto;
             `;
             addButton.onmouseenter = () => {
                 addButton.style.background = 'rgba(255, 20, 147, 0.25)';
@@ -130,7 +166,36 @@ export default class SettingsSwapperUI extends UI {
             addButton.onclick = () => {
                 this.showAddProfileDialog();
             };
-            profilesList.appendChild(addButton);
+            
+            // Save Current Settings Button
+            const saveCurrentButton = document.createElement('button');
+            saveCurrentButton.className = 'settingsBtn';
+            saveCurrentButton.textContent = 'Save Current Settings';
+            saveCurrentButton.style.cssText = `
+                background: rgba(100, 200, 100, 0.15);
+                border: 1px solid rgba(100, 200, 100, 0.6);
+                color: #E5FFE5;
+                padding: 12px 20px;
+                cursor: pointer;
+                border-radius: 4px;
+                font-weight: bold;
+                font-size: 14px;
+                transition: none;
+                flex: 1;
+            `;
+            saveCurrentButton.onmouseenter = () => {
+                saveCurrentButton.style.background = 'rgba(100, 200, 100, 0.25)';
+            };
+            saveCurrentButton.onmouseleave = () => {
+                saveCurrentButton.style.background = 'rgba(100, 200, 100, 0.15)';
+            };
+            saveCurrentButton.onclick = () => {
+                this.showSaveCurrentSettingsDialog();
+            };
+            
+            buttonContainer.appendChild(addButton);
+            buttonContainer.appendChild(saveCurrentButton);
+            profilesList.appendChild(buttonContainer);
             
             profiles.forEach((profile, index) => {
                 const profileCard = this.createProfileCard(profile, index);
@@ -139,6 +204,139 @@ export default class SettingsSwapperUI extends UI {
         }
 
         holder.appendChild(profilesList);
+    }
+
+    private showSaveCurrentSettingsDialog() {
+        // Get current settings using exportSettings
+        let currentSettings = '';
+        try {
+            if (typeof (window as any).exportSettings === 'function') {
+                currentSettings = (window as any).exportSettings(1);
+            } else {
+                alert('Unable to export current settings. Please make sure you are in-game.');
+                return;
+            }
+        } catch (err) {
+            alert('Failed to export current settings!');
+            return;
+        }
+
+        // Create modal with maximum z-index
+        const modal = document.createElement('div');
+        modal.id = 'settingsSwapperModal';
+        modal.style.cssText = `
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(0, 30, 0, 0.85) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 999999999 !important;
+            pointer-events: all !important;
+        `;
+        
+        const content = document.createElement('div');
+        content.style.cssText = `
+            background: rgba(0, 80, 0, 0.98) !important;
+            border: 2px solid #64C864 !important;
+            border-radius: 8px !important;
+            padding: 25px !important;
+            width: 500px !important;
+            max-width: 90vw !important;
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            position: relative !important;
+            z-index: 1000000000 !important;
+        `;
+        
+        content.innerHTML = `
+            <h3 style="color: #E5FFE5; margin: 0 0 20px 0; font-size: 18px; font-weight: bold;">Save Current Settings</h3>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="color: rgba(200, 255, 200, 0.8); font-size: 13px; display: block; margin-bottom: 5px;">Profile Name:</label>
+                <input type="text" id="profileName" placeholder="e.g., My Current Setup" style="width: 100%; padding: 8px; background: rgba(0, 40, 0, 0.6); border: 1px solid rgba(100, 200, 100, 0.3); color: #E5FFE5; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="color: rgba(200, 255, 200, 0.8); font-size: 13px; display: block; margin-bottom: 5px;">Color (hex):</label>
+                <input type="text" id="profileColor" value="#64C864" placeholder="#64C864" style="width: 100%; padding: 8px; background: rgba(0, 40, 0, 0.6); border: 1px solid rgba(100, 200, 100, 0.3); color: #E5FFE5; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="color: rgba(200, 255, 200, 0.8); font-size: 13px; display: block; margin-bottom: 5px;">Current Settings (auto-captured):</label>
+                <textarea id="profileSettings" readonly style="width: 100%; height: 100px; padding: 8px; background: rgba(0, 40, 0, 0.4); border: 1px solid rgba(100, 200, 100, 0.3); color: rgba(200, 255, 200, 0.6); border-radius: 4px; font-size: 13px; resize: vertical; font-family: monospace; box-sizing: border-box;">${currentSettings}</textarea>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="cancelBtn" style="padding: 10px 20px; background: rgba(0, 100, 0, 0.3); border: 1px solid rgba(100, 200, 100, 0.4); color: #fff; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+                <button id="saveBtn" style="padding: 10px 20px; background: rgba(100, 200, 100, 0.25); border: 1px solid rgba(100, 200, 100, 0.8); color: #E5FFE5; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">Save Profile</button>
+            </div>
+        `;
+        
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // Focus first input
+        setTimeout(() => {
+            const input = document.getElementById('profileName') as HTMLInputElement;
+            if (input) {
+                input.focus();
+            }
+        }, 100);
+        
+        // Close on background click
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        };
+        
+        // Handle buttons
+        const cancelBtn = document.getElementById('cancelBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        
+        if (cancelBtn) {
+            cancelBtn.onclick = () => {
+                document.body.removeChild(modal);
+            };
+        }
+        
+        if (saveBtn) {
+            saveBtn.onclick = () => {
+                const name = (document.getElementById('profileName') as HTMLInputElement).value.trim();
+                const color = (document.getElementById('profileColor') as HTMLInputElement).value.trim();
+                const settings = (document.getElementById('profileSettings') as HTMLTextAreaElement).value.trim();
+                
+                if (!name) {
+                    alert('Please enter a profile name');
+                    return;
+                }
+                
+                if (!color) {
+                    alert('Please enter a color');
+                    return;
+                }
+                
+                if (!settings) {
+                    alert('No settings data captured');
+                    return;
+                }
+                
+                const profiles = this.getProfiles();
+                profiles.push({ name, color, settings });
+                this.saveProfiles(profiles);
+                
+                document.body.removeChild(modal);
+                this.refreshUI();
+                
+                alert(`Profile "${name}" saved successfully!`);
+            };
+        }
     }
 
     private showAddProfileDialog() {

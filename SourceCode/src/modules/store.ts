@@ -19,7 +19,6 @@ class StoreButton extends ClientOption {
     constructor(module: Module, opts: {
         name: string;
         id: string;
-        description: string;
         label: string;
         callback: () => void;
         buttonStyle?: string;
@@ -67,7 +66,6 @@ class StoreInfo extends ClientOption {
     constructor(module: Module, opts: {
         name: string;
         id: string;
-        description: string;
         content: string;
     }) {
         super(module, opts);
@@ -101,7 +99,7 @@ class StoreInfo extends ClientOption {
 type SupabaseClient = any;
 
 export default class Store extends Module {
-    name = 'Water Store';
+    name = 'Featured';
     id = 'store';
     priority = 1;
     
@@ -112,6 +110,7 @@ export default class Store extends Module {
     private linkButton: StoreButton;
     private marketplaceButton: StoreButton;
     private inventoryButton: StoreButton;
+    private pugsButton: StoreButton;
     
     options: ClientOption[] = [];
     
@@ -141,7 +140,6 @@ export default class Store extends Module {
         this.linkButton = new StoreButton(this, {
             name: 'Link Discord',
             id: 'store.link',
-            description: 'Generate a code to link your Discord account',
             label: 'Generate Link Code',
             callback: () => this.handleLinkButtonClick()
         });
@@ -149,7 +147,6 @@ export default class Store extends Module {
         this.marketplaceButton = new StoreButton(this, {
             name: 'Marketplace',
             id: 'store.marketplace',
-            description: 'Browse and purchase CSS themes',
             label: 'Browse Marketplace',
             callback: () => this.marketplaceUI.open()
         });
@@ -157,9 +154,16 @@ export default class Store extends Module {
         this.inventoryButton = new StoreButton(this, {
             name: 'Inventory',
             id: 'store.inventory',
-            description: 'View your purchased themes',
             label: 'My Inventory',
             callback: () => this.inventoryUI.open()
+        });
+
+        this.pugsButton = new StoreButton(this, {
+            name: 'PUGs',
+            id: 'store.pugs',
+            label: 'Open PUGs',
+            buttonStyle: 'width: 300px; background: linear-gradient(135deg, #ff1493, #ff69b4) !important; border: none !important; color: #fff !important;',
+            callback: () => this.openPugsWindow()
         });
 
         this.updateOptions();
@@ -197,15 +201,19 @@ export default class Store extends Module {
             // Check if this client ID has a linked Discord account (don't use .single())
             const { data, error } = await this.supabase
                 .from('user_profiles')
-                .select('discord_id')
+                .select('discord_id, discord_username')
                 .eq('client_id', clientId);
             
             if (data && data.length > 0 && data[0].discord_id) {
                 this.isLinked = true;
                 localStorage.setItem('water_store_linked', 'true');
+                localStorage.setItem('discord_id', data[0].discord_id);
+                localStorage.setItem('discord_username', data[0].discord_username || 'Unknown');
             } else {
                 this.isLinked = false;
                 localStorage.setItem('water_store_linked', 'false');
+                localStorage.removeItem('discord_id');
+                localStorage.removeItem('discord_username');
             }
             
             this.hasInitializedLinkStatus = true;
@@ -224,7 +232,6 @@ export default class Store extends Module {
         if (this.isLinked) {
             // Update link button to show "Unlink" with red background and green name
             this.linkButton.name = 'Discord Linked';
-            this.linkButton.description = 'Your Discord account is linked';
             this.linkButton.label = 'Unlink';
             this.linkButton.buttonStyle = 'width: 300px; background: #dc3545 !important;';
             this.linkButton.nameColor = '#28a745';
@@ -233,12 +240,12 @@ export default class Store extends Module {
             this.options = [
                 this.linkButton,
                 this.marketplaceButton,
-                this.inventoryButton
+                this.inventoryButton,
+                this.pugsButton
             ];
         } else {
             // Update link button to show "Generate Link Code"
             this.linkButton.name = 'Link Discord';
-            this.linkButton.description = 'Generate a code to link your Discord account';
             this.linkButton.label = 'Generate Link Code';
             this.linkButton.buttonStyle = 'width: 300px;';
             this.linkButton.nameColor = undefined;
@@ -296,6 +303,8 @@ export default class Store extends Module {
             // Update local state
             this.isLinked = false;
             localStorage.setItem('water_store_linked', 'false');
+            localStorage.removeItem('discord_id');
+            localStorage.removeItem('discord_username');
             this.updateOptions();
             
             // Restart polling after a delay and reset flag
@@ -363,6 +372,8 @@ export default class Store extends Module {
                 // Just got linked! Show notification
                 this.isLinked = true;
                 localStorage.setItem('water_store_linked', 'true');
+                localStorage.setItem('discord_id', data[0].discord_id);
+                localStorage.setItem('discord_username', data[0].discord_username);
                 this.updateOptions();
                 this.showLinkSuccessNotification(data[0].discord_username);
                 
@@ -382,6 +393,8 @@ export default class Store extends Module {
                 // Got unlinked (but don't show notification)
                 this.isLinked = false;
                 localStorage.setItem('water_store_linked', 'false');
+                localStorage.removeItem('discord_id');
+                localStorage.removeItem('discord_username');
                 this.updateOptions();
             }
         } catch (e) {
@@ -520,6 +533,15 @@ export default class Store extends Module {
                 success: false,
                 message: 'Failed to generate link code. Please try again.'
             };
+        }
+    }
+
+    private openPugsWindow() {
+        if (this.manager && this.manager.loaded) {
+            const pickup = this.manager.loaded.find((m: any) => m.id === 'pickup');
+            if (pickup && (pickup as any).openPickupWindow) {
+                (pickup as any).openPickupWindow();
+            }
         }
     }
 

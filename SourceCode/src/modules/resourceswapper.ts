@@ -25,14 +25,11 @@ export default class ResourceSwapper extends Module {
     options = [
         new Checkbox(this, {
             name: 'Enabled',
-            description:
-                'Swaps game resources with ones from the resource swapper folder.',
             id: 'enabled',
             defaultValue: true,
         }),
         new Checkbox(this, {
             name: 'Enable Userscripts',
-            description: 'Allow custom JavaScript scripts to run',
             id: 'enableUserscripts',
             needsRestart: true,
             defaultValue: true,

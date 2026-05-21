@@ -1,7 +1,7 @@
 /**
  * Water Client - Userscript Hot Reload System
  * Watches for file changes and reloads scripts without restart
- * Supports: Local scripts, Premium scripts (cache), Bundled scripts
+ * Supports: Local scripts, Premium scripts (cache)
  */
 
 import { watch, FSWatcher } from 'chokidar';
@@ -17,7 +17,7 @@ class UserscriptHotReload {
     /**
      * Start watching a directory for script changes
      */
-    start(path: string, scriptType: 'local' | 'premium' | 'bundled' = 'local') {
+    start(path: string, scriptType: 'local' | 'premium' = 'local') {
         if (this.watchedPaths.has(path)) {
             console.log(`[Water] Already watching: ${path}`);
             return;
@@ -72,7 +72,7 @@ class UserscriptHotReload {
     private handleFileChange(
         filePath: string,
         event: 'added' | 'changed' | 'removed',
-        scriptType: 'local' | 'premium' | 'bundled'
+        scriptType: 'local' | 'premium'
     ) {
         // Only handle .js and .ts files
         if (!filePath.endsWith('.js') && !filePath.endsWith('.ts')) {
@@ -110,7 +110,7 @@ class UserscriptHotReload {
     private async reloadScript(
         scriptName: string,
         filePath: string,
-        scriptType: 'local' | 'premium' | 'bundled'
+        scriptType: 'local' | 'premium'
     ) {
         try {
             // Find existing script
@@ -124,7 +124,7 @@ class UserscriptHotReload {
             }
 
             // Check if script is enabled
-            const namespace = scriptType === 'premium' ? 'purchased' : scriptType;
+            const namespace = scriptType === 'premium' ? 'purchased' : 'local';
             const isEnabled = su.config.get(`userscripts.${namespace}.${scriptName}.enabled`, true);
 
             if (!isEnabled) {
@@ -172,7 +172,7 @@ class UserscriptHotReload {
     /**
      * Unload a script (call cleanup, remove from array)
      */
-    private unloadScript(scriptName: string, scriptType: 'local' | 'premium' | 'bundled') {
+    private unloadScript(scriptName: string, scriptType: 'local' | 'premium') {
         const index = su.userscripts.findIndex(s => s.name === scriptName);
         if (index !== -1) {
             const script = su.userscripts[index];
@@ -294,7 +294,7 @@ class UserscriptHotReload {
                 return this.reloadPurchasedScript(scriptName);
             }
 
-            // Local / bundled: unload + re-read from disk + re-execute
+            // Local: unload + re-read from disk + re-execute
             const filePath = existing.fullpath;
             const scriptType = existing.scriptType;
 

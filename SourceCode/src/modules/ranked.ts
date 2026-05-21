@@ -11,14 +11,12 @@ export default class Ranked extends Module {
     options = [
         new Checkbox(this, {
             name: 'Auto-Focus on Match Found',
-            description: 'Automatically brings the game window to focus when a ranked match is found',
             id: 'autoFocus',
             defaultValue: true,
             needsRestart: true,
         }),
         new Dropdown(this, {
             name: 'Insta-Lock Class',
-            description: 'Automatically select this class when a ranked match is found',
             id: 'instaLockClass',
             options: [
                 { name: 'Disabled', value: '-1' },

@@ -3,7 +3,6 @@
 export default abstract class ClientOption {
     name: string;
     id: string;
-    description: string;
     module: Module;
 
     defaultValue?: any;
@@ -15,7 +14,6 @@ export default abstract class ClientOption {
     constructor(module: Module, opts: {
         name: string,
         id: string,
-        description: string,
         needsRefresh?: boolean,
         needsRestart?: boolean,
         defaultValue?: any,
@@ -24,7 +22,6 @@ export default abstract class ClientOption {
         this.module = module;
         this.name = opts.name;
         this.id = opts.id;
-        this.description = opts.description;
         this.needsRefresh = opts.needsRefresh;
         this.needsRestart = opts.needsRestart;
         this.defaultValue = opts.defaultValue;
@@ -41,13 +38,9 @@ export default abstract class ClientOption {
         let name = document.createElement('span');
         name.classList.add('name');
 
-        let description = document.createElement('span');
-        description.classList.add('description');
-
         name.innerHTML = this.name;
-        description.innerHTML = this.description;
 
-        nameContainer.append(name, description);
+        nameContainer.append(name);
         container.append(nameContainer);
 
         for(let i = 0; i < 2; i++) {

@@ -80,8 +80,10 @@ export default class RankBadgeSync extends Module {
 
     
     private injectBadgeIntoItem(item: Element): void {
-        // PERFORMANCE: Early exit if already fully processed
+        // ROBUST CHECK: Multiple layers of protection against re-processing
         if (item.hasAttribute('data-water-badge-processed')) return;
+        if ((item as any).__rankBadgeApplied === true) return;
+        if (item.classList.contains('rank-badge-processed')) return;
         
         try {
             const nameEl = item.querySelector('.leaderNameM, .leaderNameF, .leaderName');
@@ -107,6 +109,7 @@ export default class RankBadgeSync extends Module {
             const rankSrc = this.rankCache.get(name);
             if (!rankSrc) return;
 
+            // Check if badge already exists
             const existing = item.querySelector('.waterLeaderRanked img') as HTMLImageElement;
             if (existing) {
                 if (existing.src !== rankSrc) existing.src = rankSrc;
@@ -116,8 +119,10 @@ export default class RankBadgeSync extends Module {
                     this.activePlayerBadgeSet = true;
                     item.setAttribute('data-water-badge-locked', 'true');
                 }
-                // PERFORMANCE: Mark as fully processed
+                // ROBUST MARKING: Mark as fully processed with all markers
+                (item as any).__rankBadgeApplied = true;
                 item.setAttribute('data-water-badge-processed', 'true');
+                item.classList.add('rank-badge-processed');
                 return;
             }
 
@@ -130,10 +135,10 @@ export default class RankBadgeSync extends Module {
             img.src = rankSrc;
             img.alt = 'Rank';
             img.className = 'newLeaderRankedIcon';
-            img.style.cssText = 'width:24px;height:24px;';
+            img.style.cssText = 'width:24px;height:24px;pointer-events:none;';
 
             badge.appendChild(img);
-            item.insertBefore(badge, nameEl);
+            nameEl.parentElement?.insertBefore(badge, nameEl);
 
             // Mark active player badge as set and lock the item
             if (isActivePlayer) {
@@ -142,8 +147,10 @@ export default class RankBadgeSync extends Module {
                 console.log('[RankBadgeSync] Active player badge locked');
             }
             
-            // PERFORMANCE: Mark as fully processed
+            // ROBUST MARKING: Mark as fully processed with all markers
+            (item as any).__rankBadgeApplied = true;
             item.setAttribute('data-water-badge-processed', 'true');
+            item.classList.add('rank-badge-processed');
         } catch (err) {
             console.log('[RankBadgeSync] injectBadgeIntoItem error:', err);
         }
@@ -177,17 +184,30 @@ export default class RankBadgeSync extends Module {
                 for (const node of mutation.addedNodes) {
                     if (node.nodeType !== 1) continue;
                     const el = node as Element;
+                    
+                    // Skip if already processed
+                    if (el.hasAttribute('data-water-badge-processed')) continue;
+                    if ((el as any).__rankBadgeApplied === true) continue;
+                    if (el.classList.contains('rank-badge-processed')) continue;
+                    
                     if (el.classList && el.classList.contains('leaderItem')) {
                         itemsToProcess.push(el);
                     } else if (el.querySelectorAll) {
                         el.querySelectorAll('.leaderItem').forEach((item) => {
+                            // Skip if already processed
+                            if (item.hasAttribute('data-water-badge-processed')) return;
+                            if ((item as any).__rankBadgeApplied === true) return;
+                            if (item.classList.contains('rank-badge-processed')) return;
                             itemsToProcess.push(item);
                         });
                     }
                 }
             }
             
-            itemsToProcess.forEach((item) => this.injectBadgeIntoItem(item));
+            // Process items in batch
+            if (itemsToProcess.length > 0) {
+                itemsToProcess.forEach((item) => this.injectBadgeIntoItem(item));
+            }
         });
 
         this.rowObserver.observe(holder, { childList: true, subtree: true });
