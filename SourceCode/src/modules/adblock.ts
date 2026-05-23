@@ -7,6 +7,7 @@ import { request } from 'https';
 export default class AdBlock extends Module {
     hostsURL = 'https://blocklistproject.github.io/Lists/ads.txt';
     hosts: string[] = [];
+    private regexCache = new Map<string, RegExp>();
     
     // URL pattern blocklist
     urlBlocklist: string[] = [
@@ -189,16 +190,14 @@ export default class AdBlock extends Module {
      * Pattern format: *://domain.com/path/*
      */
     matchPattern(pattern: string, url: string): boolean {
-        // Convert pattern to regex
-        // Escape special regex characters except *
-        let regexPattern = pattern
-            .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
-            .replace(/\*/g, '.*'); // Convert * to .*
-        
-        // Add anchors
-        regexPattern = '^' + regexPattern + '$';
-        
-        const regex = new RegExp(regexPattern);
+        let regex = this.regexCache.get(pattern);
+        if (!regex) {
+            let regexPattern = pattern
+                .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '.*');
+            regex = new RegExp('^' + regexPattern + '$');
+            this.regexCache.set(pattern, regex);
+        }
         return regex.test(url);
     }
 }

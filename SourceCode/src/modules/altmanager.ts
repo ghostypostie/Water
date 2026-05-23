@@ -6,18 +6,45 @@ import Button from '../options/button';
 import TextInput from '../options/textinput';
 import { waitFor } from '../util';
 import Keybind, { KeyType } from '../options/keybind';
+import { createCipheriv, createDecipheriv, scryptSync, randomBytes } from 'crypto';
+import { hostname, userInfo } from 'os';
 
-let encryptionKey = 'a5de16da0bb09720a7a917736c3be0beddc4418816c5f469a31419f1f6d5e592';
-export let encrypt = (data: string) => {
+// AES-256-GCM encryption with machine-derived key
+// Key is derived from hostname + username — not stored in source code
+const machineId = hostname() + userInfo().username;
+const salt = 'water-client-alt-manager-v1';
+const encryptionKey = scryptSync(machineId, salt, 32);
+
+function encryptPassword(plaintext: string): string {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', encryptionKey, iv);
+    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    return `v2:${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+function decryptPassword(stored: string): string {
+    // New AES-256-GCM format
+    if (stored.startsWith('v2:')) {
+        const parts = stored.split(':');
+        const ivHex = parts[1];
+        const authTagHex = parts[2];
+        const ciphertext = parts[3];
+        const decipher = createDecipheriv('aes-256-gcm', encryptionKey, Buffer.from(ivHex, 'hex'));
+        decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+        let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    }
+    // Legacy XOR fallback for migrating existing passwords
+    const legacyKey = 'a5de16da0bb09720a7a917736c3be0beddc4418816c5f469a31419f1f6d5e592';
     let out = '';
-    for (let i = 0; i < data.length; i++) {
-        out += String.fromCharCode(
-            data.charCodeAt(i) ^
-                encryptionKey.charCodeAt(i % encryptionKey.length)
-        );
+    for (let i = 0; i < stored.length; i++) {
+        out += String.fromCharCode(stored.charCodeAt(i) ^ legacyKey.charCodeAt(i % legacyKey.length));
     }
     return out;
-};
+}
 
 class AddAltUI extends UI {
     categories = [
@@ -70,12 +97,12 @@ class AddAltUI extends UI {
                 let altIndex = alts.findIndex((a) => a.username === username);
 
                 if (altIndex !== -1) {
-                    alts[altIndex].password = encrypt(password);
+                    alts[altIndex].password = encryptPassword(password);
                     alts[altIndex].keybind = keybind;
                 } else {
                     alts.push({
                         username,
-                        password: encrypt(password),
+                        password: encryptPassword(password),
                         keybind,
                     });
                 }
@@ -230,7 +257,20 @@ export default class AltManager extends Module {
             if (!usernameInput || !passwordInput || !loginBtn) return;
 
             (usernameInput as HTMLInputElement).value = alt.username;
-            (passwordInput as HTMLInputElement).value = encrypt(alt.password);
+
+            // Decrypt password (handles both AES and legacy XOR formats)
+            const decryptedPassword = decryptPassword(alt.password);
+            (passwordInput as HTMLInputElement).value = decryptedPassword;
+
+            // Auto-migrate legacy XOR passwords to AES
+            if (!alt.password.startsWith('v2:')) {
+                const alts = JSON.parse(localStorage.getItem('taxAltManager') || '[]');
+                const idx = alts.findIndex((a: any) => a.username === alt.username);
+                if (idx !== -1) {
+                    alts[idx].password = encryptPassword(decryptedPassword);
+                    localStorage.setItem('taxAltManager', JSON.stringify(alts));
+                }
+            }
 
             usernameInput.dispatchEvent(new Event('input'));
             passwordInput.dispatchEvent(new Event('input'));
@@ -256,7 +296,7 @@ export default class AltManager extends Module {
         };
 
         this.config.set('editui.username', alt.username);
-        this.config.set('editui.password', encrypt(alt.password));
+        this.config.set('editui.password', decryptPassword(alt.password));
         if (alt.keybind) this.config.set('editui.keybind', alt.keybind);
         this.addAltUI.open();
     }

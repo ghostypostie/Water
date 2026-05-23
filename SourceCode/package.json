@@ -19,10 +19,8 @@
   },
   "devDependencies": {
     "@types/node": "^16.18.126",
-    "@types/ws": "^8.5.10",
     "electron": "npm:electron-nightly@12.0.0-nightly.20201116",
-    "electron-builder": "^26.8.1",
-    "shx": "^0.4.0"
+    "electron-builder": "^26.8.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
@@ -31,7 +29,7 @@
     "dotenv": "^17.4.1",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.8.3",
-    "typescript": "^5.9.3",
-    "ws": "^8.16.0"
+    "msgpack-lite": "^0.1.26",
+    "typescript": "^5.9.3"
   }
 }

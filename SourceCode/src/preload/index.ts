@@ -14,7 +14,7 @@ import { ipcRenderer } from 'electron';
             console.error('[Electron] Failed to focus window:', e);
             return false;
         }
-    }
+    },
 };
 
 let url = new URL(window.location.href);

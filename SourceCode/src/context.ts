@@ -2,6 +2,7 @@
     Game,
     Editor,
     Viewer,
+    Social,
     Startup,
     Common
 }
@@ -21,6 +22,8 @@ export function fromURL(url: URL): Context | null {
             return Context.Editor;
         case '/viewer.html':
             return Context.Viewer;
+        case '/social.html':
+            return Context.Social;
         default:
             // All other krunker.io/browserfps.com links open in a Water window
             return Context.Viewer;

@@ -1,4 +1,4 @@
-﻿// Load environment variables from .env file
+// Load environment variables from .env file
 import 'dotenv/config';
 
 import {
@@ -14,8 +14,18 @@ import createMainWindow from './main';
 import config from './config';
 import { Context, RunAt } from './context';
 import { join } from 'path';
+import { initEnvIpc, getEnv } from './utils/env';
 
-// Suppress Chromium GL error spam
+// Initialize Env IPC listener
+initEnvIpc();
+const env = getEnv();
+console.log('[Water] Startup Credentials Check:', {
+    supabase: env.SUPABASE_URL ? 'PRESENT' : 'MISSING',
+    github: env.GITHUB_TOKEN ? 'PRESENT' : 'MISSING',
+    server: env.WATER_SERVER_URL ? 'PRESENT' : 'MISSING'
+});
+
+// Suppress Electron security warnings (intentional: contextIsolation disabled for mod support)
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 app.commandLine.appendSwitch('disable-logging');
 app.commandLine.appendSwitch('log-level', '3');

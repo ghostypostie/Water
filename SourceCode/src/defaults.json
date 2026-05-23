@@ -16,7 +16,7 @@
     "misc": {
         "watermark": true
     },
-    "waterBotAPI": "https://outhouse-clobber-imprecise.ngrok-free.dev",
+    "waterBotAPI": "",
     "modules": {
         "clancolorizer": {
             "enabled": true

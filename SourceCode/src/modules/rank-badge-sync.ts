@@ -81,7 +81,7 @@ export default class RankBadgeSync extends Module {
     
     private injectBadgeIntoItem(item: Element): void {
         // ROBUST CHECK: Multiple layers of protection against re-processing
-        if (item.hasAttribute('data-water-badge-processed')) return;
+        if (item.hasAttribute('data-rankbadge-processed')) return;
         if ((item as any).__rankBadgeApplied === true) return;
         if (item.classList.contains('rank-badge-processed')) return;
         
@@ -101,7 +101,7 @@ export default class RankBadgeSync extends Module {
             }
 
             // If this item is marked as processed for active player, skip
-            if (isActivePlayer && item.hasAttribute('data-water-badge-locked')) {
+            if (isActivePlayer && item.hasAttribute('data-rankbadge-locked')) {
                 return;
             }
 
@@ -117,11 +117,11 @@ export default class RankBadgeSync extends Module {
                 // Mark active player badge as set and lock the item
                 if (isActivePlayer) {
                     this.activePlayerBadgeSet = true;
-                    item.setAttribute('data-water-badge-locked', 'true');
+                    item.setAttribute('data-rankbadge-locked', 'true');
                 }
                 // ROBUST MARKING: Mark as fully processed with all markers
                 (item as any).__rankBadgeApplied = true;
-                item.setAttribute('data-water-badge-processed', 'true');
+                item.setAttribute('data-rankbadge-processed', 'true');
                 item.classList.add('rank-badge-processed');
                 return;
             }
@@ -143,13 +143,13 @@ export default class RankBadgeSync extends Module {
             // Mark active player badge as set and lock the item
             if (isActivePlayer) {
                 this.activePlayerBadgeSet = true;
-                item.setAttribute('data-water-badge-locked', 'true');
+                item.setAttribute('data-rankbadge-locked', 'true');
                 console.log('[RankBadgeSync] Active player badge locked');
             }
             
             // ROBUST MARKING: Mark as fully processed with all markers
             (item as any).__rankBadgeApplied = true;
-            item.setAttribute('data-water-badge-processed', 'true');
+            item.setAttribute('data-rankbadge-processed', 'true');
             item.classList.add('rank-badge-processed');
         } catch (err) {
             console.log('[RankBadgeSync] injectBadgeIntoItem error:', err);
@@ -186,7 +186,7 @@ export default class RankBadgeSync extends Module {
                     const el = node as Element;
                     
                     // Skip if already processed
-                    if (el.hasAttribute('data-water-badge-processed')) continue;
+                    if (el.hasAttribute('data-rankbadge-processed')) continue;
                     if ((el as any).__rankBadgeApplied === true) continue;
                     if (el.classList.contains('rank-badge-processed')) continue;
                     
@@ -195,7 +195,7 @@ export default class RankBadgeSync extends Module {
                     } else if (el.querySelectorAll) {
                         el.querySelectorAll('.leaderItem').forEach((item) => {
                             // Skip if already processed
-                            if (item.hasAttribute('data-water-badge-processed')) return;
+                            if (item.hasAttribute('data-rankbadge-processed')) return;
                             if ((item as any).__rankBadgeApplied === true) return;
                             if (item.classList.contains('rank-badge-processed')) return;
                             itemsToProcess.push(item);

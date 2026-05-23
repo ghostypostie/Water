@@ -20,8 +20,6 @@ export default class EditorPreload extends Preload {
 
         if (editorPlus.status === 200) {
             let content = editorPlus.responseText;
-            let info = parseHeader(content);
-
             let toGrant = {
                 unsafeWindow: window,
                 GM_getValue,

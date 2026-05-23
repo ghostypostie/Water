@@ -44,9 +44,6 @@ export default class Ranked extends Module {
         },
     ];
 
-    private matchFoundTriggered = false;
-    private isReady = false;
-
     main() {
         let { window: mainWindow } = require('../main');
 

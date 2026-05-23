@@ -183,16 +183,6 @@ export default class KeybindChanger extends Module {
         };
     }
 
-    private toggleSection(header: HTMLElement) {
-        const icon = header.querySelector('.plusOrMinus');
-        const body = header.nextElementSibling as HTMLElement;
-        if (body) {
-            const isOpen = body.style.display !== 'none';
-            if (icon) icon.textContent = isOpen ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
-            body.style.display = isOpen ? 'none' : '';
-        }
-    }
-
     private openKeybindWindow() {
         if (this.isWindowOpen) return;
 

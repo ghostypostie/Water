@@ -146,6 +146,7 @@ export default class ClanColorizer extends Module {
         if (this.observer) this.observer.disconnect();
 
         this.observer = new MutationObserver((mutations) => {
+            console.log('[ClanColorizer] Observer fired with', mutations.length, 'mutations');
             const elementsToProcess: Element[] = [];
             
             for (const mutation of mutations) {

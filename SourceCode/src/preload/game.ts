@@ -5,6 +5,7 @@ import '../types/window';
 import { join } from 'path';
 import { branch, commit } from '../../buildinfo.json';
 import { waitFor } from '../util';
+import config from '../config';
 
 // Only run loading screen on game window (not social, editor, etc.)
 const isGameWindow = window.location.hostname === 'krunker.io' && window.location.pathname === '/';
@@ -183,7 +184,9 @@ export default class GamePreload extends Preload {
     }
 
     onLoadEnd() {
-        window.clientExit.style.display = 'flex';
+        if (window.clientExit) {
+            window.clientExit.style.display = 'flex';
+        }
         window.closeClient = () => window.close();
 
         // Inject game.css with mutation observer to ensure it always overrides
@@ -212,8 +215,6 @@ export default class GamePreload extends Preload {
     
     applyRemoveAnimations() {
         try {
-            const Store = require('electron-store');
-            const config = new Store();
             const removeAnimations = config.get('modules.performance.removeAnimations', false);
             
             if (removeAnimations) {
@@ -236,8 +237,6 @@ export default class GamePreload extends Preload {
     
     applyRuntimeOptimizations() {
         try {
-            const Store = require('electron-store');
-            const config = new Store();
             const enablePerformanceOptimizations = config.get('modules.performance.enablePerformanceOptimizations', true);
             
             if (!enablePerformanceOptimizations) {

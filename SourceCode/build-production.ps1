@@ -1,4 +1,4 @@
-﻿# Production Build Script for Water Client
+# Production Build Script for Water Client
 # Creates optimized NSIS installer for distribution
 
 Write-Host "=== Water Client - Production Build ===" -ForegroundColor Cyan
@@ -11,13 +11,47 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: TypeScript compilation failed!" -ForegroundColor Red
     exit 1
 }
-Write-Host "TypeScript compiled successfully ✓" -ForegroundColor Green
+Write-Host "TypeScript compiled successfully" -ForegroundColor Green
 Write-Host ""
 
-# Step 2: Backup package.json
-Write-Host "[2/7] Backing up package.json..." -ForegroundColor Cyan
+# Step 2: Backup package.json and preparing secrets
+Write-Host "[2/7] Backing up package.json and preparing secrets..." -ForegroundColor Cyan
 Copy-Item package.json package.json.backup -Force
-Write-Host "package.json backed up ✓" -ForegroundColor Green
+
+# Generate secrets.json for production build
+if (Test-Path ".env") {
+    Write-Host "Found .env file, generating secrets.json for production..." -ForegroundColor Yellow
+    $secrets = @{}
+    $envLines = Get-Content ".env"
+    foreach ($line in $envLines) {
+        $line = $line.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $index = $line.IndexOf("=")
+            $key = $line.Substring(0, $index).Trim()
+            $value = $line.Substring($index + 1).Trim()
+            
+            # Strip quotes if present
+            if ($value.StartsWith('"') -and $value.EndsWith('"')) {
+                $value = $value.Substring(1, $value.Length - 2)
+            } elseif ($value.StartsWith("'") -and $value.EndsWith("'")) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+            
+            $secrets[$key] = $value
+        }
+    }
+    
+    $json = $secrets | ConvertTo-Json
+    if (-not (Test-Path "js/utils")) {
+        New-Item -ItemType Directory -Path "js/utils" -Force | Out-Null
+    }
+    $json | Out-File -FilePath "js/utils/secrets.json" -Encoding utf8
+    Write-Host "secrets.json generated successfully" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: .env file not found! Production build may be missing credentials." -ForegroundColor Red
+}
+
+Write-Host "package.json backed up" -ForegroundColor Green
 Write-Host ""
 
 # Step 3: Clean node_modules
@@ -45,7 +79,7 @@ while ($retries -lt $maxRetries) {
         }
     }
 }
-Write-Host "node_modules cleaned ✓" -ForegroundColor Green
+Write-Host "node_modules cleaned" -ForegroundColor Green
 Write-Host ""
 
 # Step 4: Install production dependencies only
@@ -54,7 +88,7 @@ npm install --omit=dev --force
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Failed to install production dependencies!" -ForegroundColor Red
     # Restore and exit
-    if (Test-Path package.json.backup) {
+    if (Test-Path "package.json.backup") {
         Copy-Item package.json.backup package.json -Force
         Remove-Item package.json.backup -Force
     }
@@ -62,13 +96,13 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 $prodPackages = (Get-ChildItem node_modules -Directory | Measure-Object).Count
-Write-Host "Production dependencies installed ($prodPackages packages) ✓" -ForegroundColor Green
+Write-Host "Production dependencies installed ($prodPackages packages)" -ForegroundColor Green
 Write-Host ""
 
 # Step 5: Temporarily install electron-builder
 Write-Host "[5/7] Installing electron-builder..." -ForegroundColor Cyan
 npm install electron-builder@26.8.1 --no-save --silent
-Write-Host "electron-builder installed ✓" -ForegroundColor Green
+Write-Host "electron-builder installed" -ForegroundColor Green
 Write-Host ""
 
 # Step 6: Build NSIS installer (x64 only)
@@ -84,31 +118,38 @@ npx electron-builder --win nsis --x64 --config electron-builder.json
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Build failed!" -ForegroundColor Red
     # Restore package.json
-    if (Test-Path package.json.backup) {
+    if (Test-Path "package.json.backup") {
         Copy-Item package.json.backup package.json -Force
         Remove-Item package.json.backup -Force
     }
     npm install
     exit 1
 }
-Write-Host "NSIS installer built successfully ✓" -ForegroundColor Green
+Write-Host "NSIS installer built successfully" -ForegroundColor Green
 Write-Host ""
 
 # Step 7: Restore package.json and dependencies
 Write-Host "[7/7] Restoring development environment..." -ForegroundColor Cyan
-if (Test-Path package.json.backup) {
+
+# Cleanup secrets.json from build
+if (Test-Path "js/utils/secrets.json") {
+    Remove-Item "js/utils/secrets.json" -Force
+    Write-Host "Temporary secrets.json removed" -ForegroundColor Green
+}
+
+if (Test-Path "package.json.backup") {
     Copy-Item package.json.backup package.json -Force
     Remove-Item package.json.backup -Force
 }
 npm install --silent
-Write-Host "Development dependencies restored ✓" -ForegroundColor Green
+Write-Host "Development dependencies restored" -ForegroundColor Green
 Write-Host ""
 
 # Show results
 Write-Host "=== Production Build Complete ===" -ForegroundColor Green
 Write-Host ""
 
-# Check for Water.exe (new naming convention)
+# Check for Water.exe
 if (Test-Path "dist/Water.exe") {
     $installer = Get-Item "dist/Water.exe"
     $sizeMB = [math]::Round($installer.Length / 1MB, 2)
@@ -119,14 +160,11 @@ if (Test-Path "dist/Water.exe") {
     
     # Check for latest.yml (required for auto-updates)
     if (Test-Path "dist/latest.yml") {
-        Write-Host "✓ Update metadata (latest.yml) generated" -ForegroundColor Green
+        Write-Host "Update metadata generated" -ForegroundColor Green
     } else {
-        Write-Host "⚠ WARNING: latest.yml not found - auto-updates may not work!" -ForegroundColor Yellow
+        Write-Host "WARNING: latest.yml not found!" -ForegroundColor Yellow
     }
     
-    if ($sizeMB -lt 80) {
-        Write-Host "✓ Size optimized! (down from 110MB)" -ForegroundColor Green
-    }
     Write-Host ""
     Write-Host "=== Ready for GitHub Release ===" -ForegroundColor Cyan
     Write-Host "Upload these files to GitHub release:" -ForegroundColor White
@@ -134,8 +172,8 @@ if (Test-Path "dist/Water.exe") {
     Write-Host "  2. latest.yml" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Release tag format: v" -NoNewline -ForegroundColor White
-    $version = (Get-Content package.json | ConvertFrom-Json).version
-    Write-Host $version -ForegroundColor Green
+    $packageJson = Get-Content "package.json" | ConvertFrom-Json
+    Write-Host $packageJson.version -ForegroundColor Green
     Write-Host ""
 } else {
     Write-Host "WARNING: Installer not found in dist/" -ForegroundColor Yellow

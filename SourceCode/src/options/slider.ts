@@ -22,9 +22,9 @@ export default class Slider extends ClientOption {
     }) {
         super(module, opts);
     
-        if (opts.min) this.min = opts.min;
-        if (opts.max) this.max = opts.max;
-        if (opts.step) this.step = opts.step;
+        if (opts.min !== undefined) this.min = opts.min;
+        if (opts.max !== undefined) this.max = opts.max;
+        if (opts.step !== undefined) this.step = opts.step;
     }
 
     generate(): HTMLElement {

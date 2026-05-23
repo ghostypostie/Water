@@ -6,42 +6,14 @@ import { join } from 'path';
 import { execFile } from 'child_process';
 import * as https from 'https';
 
-// Filter console output to suppress GPU errors (but don't disable GPU itself)
-const originalConsoleError = console.error;
-console.error = (...args: any[]) => {
-    const message = args.join(' ');
-    // Suppress GPU-related error logs only
-    if (message.includes('GL_INVALID') || 
-        message.includes('glCopySubTexture') || 
-        message.includes('gl_utils.cc') ||
-        message.includes('raster_decoder.cc') ||
-        message.includes('mailbox') ||
-        message.includes('shared image')) {
-        return;
-    }
-    originalConsoleError.apply(console, args);
-};
-
 // IPC handler for getting user data path
 ipcMain.on('get-user-data-path', (event) => {
     event.returnValue = app.getPath('userData');
 });
 
-// Clan Tags & Badges - These now run in renderer process
-// Main process just acknowledges the request
-ipcMain.on('getClans', (event) => {
-    // Renderer will fetch directly from Supabase
-    event.sender.send('getClans', []);
-});
-
-ipcMain.on('getBadges', (event) => {
-    // Renderer will fetch directly from Supabase
-    event.sender.send('getBadges', []);
-});
-
-ipcMain.on('getDeathCards', (event) => {
-    // Renderer will fetch directly from Supabase
-    event.sender.send('getDeathCards', []);
+// IPC handler for showing file in explorer/folder
+ipcMain.handle('shell-show-item', (_, path: string) => {
+    shell.showItemInFolder(path);
 });
 
 // Quick Play region ping system (Tidal scanner)
@@ -143,38 +115,17 @@ let keybindCache: {
 
 // IPC handler for keybind changes - reload cache instantly
 ipcMain.on('keybinds-changed', (event, keybindData?: any) => {
-    console.log('[Main] ========================================');
-    console.log('[Main] Keybinds changed IPC received!');
-    
     if (keybindData) {
-        // Direct update from renderer - use this data immediately
-        console.log('[Main] Received keybind data directly from renderer:', keybindData);
         keybindCache = {
             newGame: keybindData.newGame || { key: 'F6', shift: false, alt: false, ctrl: false },
             refresh: keybindData.refresh || { key: 'F5', shift: false, alt: false, ctrl: false },
             fullscreen: keybindData.fullscreen || { key: 'F11', shift: false, alt: false, ctrl: false },
             devtools: keybindData.devtools || { key: 'F12', shift: false, alt: false, ctrl: false }
         };
-        console.log('[Main] Cache updated directly from IPC data');
     } else {
-        // Fallback: clear cache and reload from config
-        console.log('[Main] No keybind data provided, clearing cache and reloading from config...');
         keybindCache = null;
-        
-        // Small delay to ensure file system sync
-        setTimeout(() => {
-            const newBinds = loadKeybinds();
-            console.log('[Main] Keybinds reloaded from config');
-        }, 100);
+        setTimeout(() => loadKeybinds(), 100);
     }
-    
-    console.log('[Main] Current keybinds:', {
-        newGame: keybindCache?.newGame.key,
-        refresh: keybindCache?.refresh.key,
-        fullscreen: keybindCache?.fullscreen.key,
-        devtools: keybindCache?.devtools.key
-    });
-    console.log('[Main] ========================================');
 });
 
 // Helper to parse keybind from serialized format
@@ -346,16 +297,20 @@ export default async function createMainWindow(): Promise<BrowserWindow> {
             sandbox: false,
             contextIsolation: false,
             nativeWindowOpen: true,
+            webSecurity: false,
         },
     });
 
-    // Suppress GL error spam
+    // Suppress GL error spam (consolidated filter)
     const filterGLErrors = (...args: any[]) => {
         const message = args.join(' ');
-        return message.includes('GL ERROR') || 
-               message.includes('glCopySubTexture') || 
+        return message.includes('GL_INVALID') ||
+               message.includes('GL ERROR') ||
+               message.includes('glCopySubTexture') ||
+               message.includes('gl_utils.cc') ||
                message.includes('raster_decoder.cc') ||
-               message.includes('GL_INVALID_VALUE');
+               message.includes('mailbox') ||
+               message.includes('shared image');
     };
 
     const originalError = console.error;
@@ -443,7 +398,7 @@ export default async function createMainWindow(): Promise<BrowserWindow> {
     
     // Start loading immediately
     window.loadURL('https://krunker.io');
-    
+
     return window;
 }
 

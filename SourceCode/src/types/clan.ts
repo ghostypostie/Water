@@ -13,13 +13,3 @@ export interface ClanData {
     addonHTML?: string;
 }
 
-export interface ClanClientConfig {
-    /** WebSocket server URL */
-    serverUrl?: string;
-    
-    /** Reconnection delay in milliseconds */
-    reconnectDelay?: number;
-    
-    /** Enable debug logging */
-    debug?: boolean;
-}

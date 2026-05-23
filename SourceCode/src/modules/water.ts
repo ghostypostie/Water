@@ -502,91 +502,6 @@ export default class Water extends Module {
         }
     }
 
-    private configToSettings(config: any, scriptName: string): any {
-        const settings: any = {};
-
-        for (const [key, value] of Object.entries(config)) {
-            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                continue;
-            }
-
-            let setting: any = {
-                title: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim(),
-                desc: `Configure ${key}`,
-                value: value,
-                changed: (newValue: any) => {
-                    config[key] = newValue;
-                    console.log(`[Water] ${scriptName} config.${key} = ${newValue}`);
-                }
-            };
-
-            if (typeof value === 'boolean') {
-                setting.type = 'bool';
-            } else if (typeof value === 'number') {
-                setting.type = 'num';
-                const keyLower = key.toLowerCase();
-                if (keyLower.includes('volume') || keyLower.includes('opacity') || keyLower.includes('alpha')) {
-                    setting.min = 0; setting.max = 1; setting.step = 0.01;
-                } else if (keyLower.includes('percent') || keyLower.includes('position')) {
-                    setting.min = 0; setting.max = 100; setting.step = 1;
-                } else if (keyLower.includes('time') || keyLower.includes('delay') || keyLower.includes('duration')) {
-                    setting.min = 0; setting.max = 10000; setting.step = 100;
-                } else if (keyLower.includes('size') || keyLower.includes('scale') || keyLower.includes('zoom')) {
-                    setting.min = 0.1; setting.max = 5; setting.step = 0.1;
-                } else {
-                    setting.min = Math.min(0, (value as number) - 100);
-                    setting.max = Math.max(100, (value as number) + 100);
-                    setting.step = (value as number) < 10 ? 0.1 : 1;
-                }
-            } else if (typeof value === 'string') {
-                setting.type = 'text';
-            }
-
-            settings[key] = setting;
-        }
-
-        return settings;
-    }
-
-    loadUserThemes() {
-        try {
-            if (!existsSync(this.userCSSPath)) {
-                console.log('[Water] User CSS path does not exist:', this.userCSSPath);
-                return;
-            }
-
-            const files = readdirSync(this.userCSSPath);
-            console.log('[Water] Files in user CSS path:', files);
-            
-            this.userThemes = files
-                .filter(f => f.endsWith('.css'))
-                .map(filename => {
-                    const filePath = join(this.userCSSPath, filename);
-                    const id = `user-${filename.replace('.css', '')}`;
-                    
-                    let name = filename.replace('.css', '');
-                    let author = 'Unknown';
-                    
-                    try {
-                        const content = readFileSync(filePath, 'utf-8');
-                        const nameMatch = content.match(/\/\*\s*@name\s+(.+?)\s*\*\//);
-                        const authorMatch = content.match(/\/\*\s*@author\s+(.+?)\s*\*\//);
-                        
-                        if (nameMatch) name = nameMatch[1];
-                        if (authorMatch) author = authorMatch[1];
-                    } catch (e) {
-                        console.error('[Water] Failed to parse CSS metadata:', e);
-                    }
-
-                    return { id, name, author, filename, filePath };
-                });
-
-            console.log('[Water] Loaded', this.userThemes.length, 'user themes:', this.userThemes.map(t => t.id));
-        } catch (e) {
-            console.error('[Water] Failed to load user themes:', e);
-        }
-    }
-
     loadLocalThemes() {
         try {
             if (!existsSync(this.localThemesPath)) {
@@ -624,41 +539,6 @@ export default class Water extends Module {
             console.log('[Water] Loaded', this.localThemes.length, 'local themes:', this.localThemes.map(t => t.id));
         } catch (e) {
             console.error('[Water] Failed to load local themes:', e);
-        }
-    }
-
-    loadSwapperThemes() {
-        try {
-            if (!existsSync(this.swapperThemesPath)) return;
-
-            const files = readdirSync(this.swapperThemesPath);
-            this.swapperThemes = files
-                .filter(f => f.endsWith('.css') || f.endsWith('.txt'))
-                .map(filename => {
-                    const filePath = join(this.swapperThemesPath, filename);
-                    const ext = filename.split('.').pop();
-                    const id = `swapper-${filename.replace(/\.(css|txt)$/, '')}`;
-                    
-                    let name = filename.replace(/\.(css|txt)$/, '');
-                    let author = 'Unknown';
-                    
-                    try {
-                        const content = readFileSync(filePath, 'utf-8');
-                        const nameMatch = content.match(/\/\*\s*@name\s+(.+?)\s*\*\//);
-                        const authorMatch = content.match(/\/\*\s*@author\s+(.+?)\s*\*\//);
-                        
-                        if (nameMatch) name = nameMatch[1];
-                        if (authorMatch) author = authorMatch[1];
-                    } catch (e) {
-                        console.error('[Water] Failed to parse swapper theme metadata:', e);
-                    }
-
-                    return { id, name, author, filename, filePath };
-                });
-
-            console.log('[Water] Loaded', this.swapperThemes.length, 'swapper themes');
-        } catch (e) {
-            console.error('[Water] Failed to load swapper themes:', e);
         }
     }
 

@@ -1,6 +1,5 @@
 import { join, normalize } from 'path';
 import { existsSync, readdirSync } from 'fs';
-import { app } from 'electron';
 
 /**
  * Count files in a directory (non-recursive)
@@ -13,32 +12,6 @@ function countFiles(path: string): number {
             .length;
     } catch (e) {
         return 0;
-    }
-}
-
-/**
- * Get the application resources path (works in both dev and production, all platforms)
- */
-function getAppResourcesPath(): string {
-    // Check if app is available (renderer process might not have access)
-    if (!app || typeof app.getAppPath !== 'function') {
-        console.warn('[Water] app.getAppPath not available, using __dirname fallback');
-        // Fallback to __dirname (works in renderer process)
-        return join(__dirname, '../..');
-    }
-    
-    // In production (packaged app), app.getAppPath() returns the asar path
-    // In development, it returns the project root
-    const appPath = app.getAppPath();
-    
-    // Check if we're in an asar archive
-    if (appPath.includes('.asar')) {
-        // In production: app.asar is in resources folder
-        // We need to go to resources/app.asar/assets
-        return appPath;
-    } else {
-        // In development: appPath is the project root
-        return appPath;
     }
 }
 

@@ -9,6 +9,7 @@ import {
 import OverlayManager from "./pickup-overlays";
 import TabRenderer from "./pickup-tabs";
 import PugLobbyFinder from "./pickup-pug-finder";
+import { getEnv } from "../utils/env";
 
 const logger = createLogger("Pickup");
 
@@ -39,10 +40,10 @@ export default class PickupSystem extends Module {
   pugFinder: PugLobbyFinder;
 
   get waterBotApi(): string {
-    return this.config.get(
+    return getEnv().WATER_BOT_API || this.config.get(
       "waterBotAPI",
       "",
-    );
+    ) as string;
   }
 
   constructor() {

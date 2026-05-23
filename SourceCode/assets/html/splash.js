@@ -51,11 +51,7 @@ function initPartnerSlider() {
     });
 }
 
-window.onload = function() {
+window.addEventListener('load', function() {
     console.log("Splash screen loaded");
     initPartnerSlider();
-    
-    setTimeout(() => {
-        console.log("Client ready");
-    }, 4000);
-};
+});

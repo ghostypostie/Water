@@ -4,7 +4,6 @@ import Module from '../module';
 import Checkbox from '../options/checkbox';
 import { window } from '../main';
 import TextInput from '../options/textinput';
-import Slider from '../options/slider';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('Misc');
@@ -29,21 +28,6 @@ export default class Misc extends Module {
             label: 'https://example.com/image.gif',
             id: 'customLoadingScreen',
             needsRestart: true,
-        }),
-        new Checkbox(this, {
-            name: 'Placebo FPS',
-            id: 'placeboFps.enabled',
-            onChange: () => this.placeboFps(),
-            defaultValue: false,
-        }),
-        new Slider(this, {
-            name: 'Placebo FPS multiplier',
-            id: 'placeboFps.multiplier',
-            onChange: () => this.placeboFps(),
-            defaultValue: 1,
-            min: 1,
-            max: 10,
-            step: 0.1,
         }),
         new Checkbox(this, {
             name: 'Lock window size',
@@ -86,58 +70,8 @@ export default class Misc extends Module {
         }
     }
 
-    placeboFpsObserver: MutationObserver;
-    placeboFpsApplied = false;
-
-    placeboFps() {
-        let enabled = this.config.get('placeboFps.enabled', false);
-        let multiplier = this.config.get('placeboFps.multiplier', 1);
-
-        if (this.placeboFpsObserver) this.placeboFpsObserver.disconnect();
-
-        this.placeboFpsObserver = null;
-        this.placeboFpsApplied = false;
-
-        if (!enabled) return;
-
-        let ingameFPS = document.getElementById('ingameFPS');
-        let menuHolder = document.getElementById('menuHolder');
-        let menuFPS = document.getElementById('menuFPS');
-
-        if (!ingameFPS) return;
-
-        // PERFORMANCE: Increased throttle from 100ms to 200ms to reduce CPU usage
-        let lastUpdate = 0;
-        const throttleMs = 200; // PERFORMANCE: Increased from 100ms
-        
-        this.placeboFpsObserver = new MutationObserver(() => {
-            const now = Date.now();
-            if (now - lastUpdate < throttleMs) return;
-            lastUpdate = now;
-            
-            if (this.placeboFpsApplied) {
-                this.placeboFpsApplied = false;
-                return;
-            }
-
-            let fps = parseFloat(ingameFPS.textContent);
-            fps = Math.round(fps * multiplier + Math.random() * multiplier);
-            
-            this.placeboFpsApplied = true;
-
-            ingameFPS.textContent = fps + '';
-            if (menuHolder.style.display != 'none') menuFPS.textContent = fps + '';
-        });
-        
-        // PERFORMANCE: Simplified observer - only characterData needed, not childList or subtree
-        this.placeboFpsObserver.observe(ingameFPS, { 
-            characterData: true,
-            subtree: true // Keep subtree for text node changes
-        });
-    }
-
     renderer() {
-        this.placeboFps();
+        // Placebo FPS is handled by the Performance module
     }
 
     main() {

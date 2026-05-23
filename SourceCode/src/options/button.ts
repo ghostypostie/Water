@@ -1,7 +1,7 @@
 ﻿import Module from '../module/index';
 import ClientOption from './index';
 
-export default class Checkbox extends ClientOption {
+export default class Button extends ClientOption {
     label: string;
     color?: string;
 
