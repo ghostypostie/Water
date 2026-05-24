@@ -1,9 +1,9 @@
-# Fresh Water Available.
+# Fresh Water Available | [Water Client Discord Server](https://discord.gg/yJJ2KEZR9Y)
 
 This client aims for:
 - Community Based Client. Made for the Communtiy, Made by the Community.
-- Advanced customizability (settings and userscripts)
-- Constructive to the community (open source; under [AGPL-3.0](https://github.com/Water-client/Water/blob/master/LICENSE))
+- Advanced customizability (client settings and userscripts)
+- Constructive to the community (open source)
 
 ## Best Features
 
@@ -45,7 +45,6 @@ Custom theme and UI toggle system:
 
 ### Advanced Settings
 - **Discord Rich Presence**
-- **Auto-Update** behavior control
 - **Userscripts** support
 - **Resource Swapper** (Normal/Advanced modes)
 - **Chromium Flags** customization
